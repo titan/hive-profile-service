@@ -39,14 +39,10 @@ let svc = new Server(config);
 
 let permissions: Permission[] = [['mobile', true], ['admin', true]];
 
-svc.call('getUserInfo', permissions, (ctx: Context, rep: ResponseFunction, uids:string[]) => {
+svc.call('getUserInfo', permissions, (ctx: Context, rep: ResponseFunction) => {
   log.info('getUserInfo %j', ctx);
-  var users = {};
-  for (let uid of uids) {
-    let entity = redis.hget(entity_key, uid);
-    users[uid] = entity;
-  }
-  rep(users);
+    let entity = redis.hget(entity_key, ctx.uid);
+    rep(entity);
 });
 
 svc.call('setUserInfo', permissions, (ctx: Context, rep: ResponseFunction, openid:string, gender:string, nickname:string, portrait:string ) => {
