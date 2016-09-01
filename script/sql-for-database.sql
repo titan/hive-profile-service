@@ -1,0 +1,39 @@
+INSERT INTO 
+users 
+VALUES(
+	'00000000-0000-0000-1000-000000000000',
+	'openId',
+	'123456',
+	'username',
+	'male',
+	'111111111111111111',
+	'22222222222',
+	'abc',
+	'https://www.baidu.com/img/bd_logo1.png'
+);
+INSERT INTO 
+users 
+VALUES(
+	'00000000-0000-0000-2000-000000000000',
+	'openId',
+	'123456',
+	'username',
+	'male',
+	'111111111111111111',
+	'22222222222',
+	'abc',
+	'https://www.baidu.com/img/bd_logo1.png'
+);
+INSERT INTO 
+users 
+VALUES(
+	'00000000-0000-0000-3000-000000000000',
+	'openId',
+	'123456',
+	'username',
+	'male',
+	'111111111111111111',
+	'22222222222',
+	'abc',
+	'https://www.baidu.com/img/bd_logo1.png'
+);
