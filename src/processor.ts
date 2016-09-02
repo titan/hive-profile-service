@@ -63,16 +63,16 @@ processor.call('refresh', (db: PGClient, cache: RedisClient, done: DoneFunction)
   });
 });
 
-processor.call('setUserInfo', (db: PGClient, cache: RedisClient, done: DoneFunction, uid, openid, gender, nickname, portrait) => {
+processor.call('setUserInfo', (db: PGClient, cache: RedisClient, done: DoneFunction, args) => {
   log.info('setUserInformation');
-  db.query('INSERT INTO profile (id, openid, gender, nickname, portrait) VALUES ($1, $2, $3, $4 ,$5)',[uid, openid, gender, nickname, portrait], (err: Error) => {
+  db.query('INSERT INTO profile (id, openid, gender, nickname, portrait) VALUES ($1, $2, $3, $4 ,$5)',[args.uid, args.openid, args.gender, args.nickname, args.portrait], (err: Error) => {
      if (err) {
       log.error(err, 'query error');
      } else {
-        let profile_entities = {id:uid, openid:openid, gender:gender, nickname:nickname, portrait:portrait};
+        let profile_entities = {id:args.uid, openid:args.openid, gender:args.gender, nickname:args.nickname, portrait:args.portrait};
         let multi = cache.multi();
-        multi.hset("profile-entities", uid, JSON.stringify(profile_entities));
-        multi.sadd("profile", uid);
+        multi.hset("profile-entities", args.uid, JSON.stringify(profile_entities));
+        multi.sadd("profile", args.uid);
         multi.exec((err, replies) => {
           if (err) {
             log.error(err);
