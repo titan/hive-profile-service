@@ -4,20 +4,21 @@ import * as nanomsg from 'nanomsg';
 import * as msgpack from 'msgpack-lite';
 import * as bunyan from 'bunyan';
 import * as uuid from 'node-uuid';
+import * as hostmap from './hostmap'
 
 let log = bunyan.createLogger({
   name: 'vehicle-server',
   streams: [
     {
       level: 'info',
-      path: '/var/log/server-info.log',  // log ERROR and above to a file
+      path: '/var/log/profile-server-info.log',  // log ERROR and above to a file
       type: 'rotating-file',
       period: '1d',   // daily rotation
       count: 7        // keep 7 back copies
     },
     {
       level: 'error',
-      path: '/var/log/server-error.log',  // log ERROR and above to a file
+      path: '/var/log/profile-server-error.log',  // log ERROR and above to a file
       type: 'rotating-file',
       period: '1w',   // daily rotation
       count: 3        // keep 7 back copies
@@ -31,8 +32,8 @@ let list_key = "profile";
 let entity_key = "profile-entities";
 
 let config: Config = {
-  svraddr: 'tcp://0.0.0.0:4040',
-  msgaddr: 'ipc:///tmp/queue.ipc'
+  svraddr: hostmap.default["profile"],
+  msgaddr: 'ipc:///tmp/profile.ipc'
 };
 
 let svc = new Server(config);

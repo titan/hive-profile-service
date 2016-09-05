@@ -8,14 +8,14 @@ let log = bunyan.createLogger({
   streams: [
     {
       level: 'info',
-      path: '/var/log/processor-info.log',  // log ERROR and above to a file
+      path: '/var/log/profile-processor-info.log',  // log ERROR and above to a file
       type: 'rotating-file',
       period: '1d',   // daily rotation
       count: 7        // keep 7 back copies
     },
     {
       level: 'error',
-      path: '/var/log/processor-error.log',  // log ERROR and above to a file
+      path: '/var/log/profile-processor-error.log',  // log ERROR and above to a file
       type: 'rotating-file',
       period: '1w',   // daily rotation
       count: 3        // keep 7 back copies
@@ -26,10 +26,11 @@ let log = bunyan.createLogger({
 let config: Config = {
   dbhost: process.env['DB_HOST'],
   dbuser: process.env['DB_USER'],
+  dbport: process.env['DB_PORT'],
   database: process.env['DB_NAME'],
   dbpasswd: process.env['DB_PASSWORD'],
   cachehost: process.env['CACHE_HOST'],
-  addr: "ipc:///tmp/queue.ipc"
+  addr: "ipc:///tmp/profile.ipc"
 };
 
 let processor = new Processor(config);
