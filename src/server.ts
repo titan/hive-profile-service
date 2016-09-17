@@ -40,17 +40,33 @@ let svc = new Server(config);
 
 let permissions: Permission[] = [['mobile', true], ['admin', true]];
 
-svc.call('getUserInfo', permissions, (ctx: Context, rep: ResponseFunction) => {
-  log.info('getUserInfo %j', ctx);
-    let entity = redis.hget(entity_key, ctx.uid);
-    rep(entity);
+svc.call('getUserInfo', permissions, (ctx: Context, rep: ResponseFunction ) => {
+  log.info('getUserInfo '+ ctx);
+    redis.hget(entity_key, ctx.uid, function (err, result) {
+      if (err) {
+        rep([]);
+      } else {
+        rep(JSON.parse(result));
+      }
+    });
+});
+
+svc.call('getUserOpenId', permissions, (ctx: Context, rep: ResponseFunction, uid:string) => {
+  log.info('getUserInfo' + uid);
+    redis.hget("wxuser", uid, function (err, result) {
+      if (err) {
+        rep([]);
+      } else {
+        rep(result);
+      }
+    });
 });
 
 svc.call('setUserInfo', permissions, (ctx: Context, rep: ResponseFunction, openid:string, gender:string, nickname:string, portrait:string ) => {
   log.info('setUserInfo %j', ctx);
   let uid = uuid.v1();
   let args = [uid, openid, gender, nickname, portrait]
-  ctx.msgqueue.send(msgpack.encode({cmd: "refresh", args: args}));
+  ctx.msgqueue.send(msgpack.encode({cmd: "setUserInfo", args: args}));
 });
 
 svc.call('refresh', permissions, (ctx: Context, rep: ResponseFunction) => {

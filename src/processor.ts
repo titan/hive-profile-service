@@ -37,7 +37,7 @@ let processor = new Processor(config);
 
 processor.call('refresh', (db: PGClient, cache: RedisClient, done: DoneFunction) => {
   log.info('refresh');
-  db.query('SELECT id, openId, name, gender, identity_no, phone, nickname, portrait FROM users', [], (err: Error, result: ResultSet) => {
+  db.query('SELECT id, openid, name, gender, identity_no, phone, nickname, portrait FROM users', [], (err: Error, result: ResultSet) => {
     if (err) {
       log.error(err, 'query error');
       return;
@@ -87,7 +87,7 @@ processor.call('setUserInfo', (db: PGClient, cache: RedisClient, done: DoneFunct
 function row2user(row) {
   return {
     id: row.id,
-    openId: row.openId,
+    openid: row.openid,
     name: row.name? row.name.trim(): '',
     gender: row.gender? row.gender.trim(): '',
     identity_no: row.identity_no,
