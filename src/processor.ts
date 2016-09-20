@@ -1,7 +1,9 @@
-import { Processor, Config, ModuleFunction, DoneFunction } from 'hive-processor';
+import { Processor, Config, ModuleFunction, DoneFunction, rpc } from 'hive-processor';
 import { Client as PGClient, ResultSet } from 'pg';
 import { createClient, RedisClient} from 'redis';
 import * as bunyan from 'bunyan';
+import * as hostmap from './hostmap';
+import * as uuid from 'node-uuid';
 
 let log = bunyan.createLogger({
   name: 'profile-processor',

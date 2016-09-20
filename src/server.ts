@@ -1,13 +1,13 @@
 import { Server, Config, Context, ResponseFunction, Permission } from 'hive-server';
 import * as Redis from "redis";
 import * as nanomsg from 'nanomsg';
+import * as http from 'http';
 import * as msgpack from 'msgpack-lite';
 import * as bunyan from 'bunyan';
-import * as uuid from 'node-uuid';
 import * as hostmap from './hostmap'
 
 let log = bunyan.createLogger({
-  name: 'vehicle-server',
+  name: 'profile-server',
   streams: [
     {
       level: 'info',
@@ -84,11 +84,12 @@ svc.call('refresh', permissions, (ctx: Context, rep: ResponseFunction) => {
 
 //获取所有用户信息
 svc.call('getAllUsers', permissions, (ctx: Context, rep: ResponseFunction, start:number, limit:number) => {
-  log.info('getVehicleInfos' + "uid is " + ctx.uid);
+  log.info('getAllUsers' + "uid is " + ctx.uid);
   redis.lrange(list_key, start, limit, function (err, result) {
     if (err) {
       rep({code:500, msg:[]});
     } else {
+      log.info("getAllUsers result" + result);
       ids2objects(entity_key, result, rep);
     }
   });
