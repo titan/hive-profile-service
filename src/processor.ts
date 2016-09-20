@@ -40,40 +40,38 @@ processor.call('refresh', (db: PGClient, cache: RedisClient, done: DoneFunction)
   db.query('SELECT id, openid, name, gender, identity_no, phone, nickname, portrait FROM users', [], (err: Error, result: ResultSet) => {
     if (err) {
       log.error(err, 'query error');
-      return;
+      done();
     }
     let users = [];
     for (let row of result.rows) {
       users.push(row2user(row));
     }
-    console.log("users:"+users)
+    log.info("users:" + users)
     let multi = cache.multi();
     for (let user of users) {
       multi.hset("profile-entities", user.id, JSON.stringify(user));
-    }
-    for (let user of users) {
       multi.lpush("profile", user.id);
     }
     multi.exec((err, replies) => {
-    if (err) {
-      console.error(err);
-    }
-    done(); // close db and cache connection
-  });
-    
+      if (err) {
+        log.info("multi err" + err);
+      }
+      done(); 
+    });
   });
 });
 
-processor.call('setUserInfo', (db: PGClient, cache: RedisClient, done: DoneFunction, args) => {
-  log.info('setUserInformation');
-  db.query('INSERT INTO profile (id, openid, gender, nickname, portrait) VALUES ($1, $2, $3, $4 ,$5)',[args.uid, args.openid, args.gender, args.nickname, args.portrait], (err: Error) => {
+processor.call('addUserInfo', (db: PGClient, cache: RedisClient, done: DoneFunction, args) => {
+  log.info('addUserInfo' + args);
+  let uid = uuid.v1();
+  db.query('INSERT INTO users (id, openid, gender, nickname, portrait) VALUES ($1, $2, $3, $4 ,$5)',[uid, args.openid, args.gender, args.nickname, args.portrait], (err: Error) => {
      if (err) {
       log.error(err, 'query error');
      } else {
-        let profile_entities = {id:args.uid, openid:args.openid, gender:args.gender, nickname:args.nickname, portrait:args.portrait};
+        let profile_entities = {id:uid, openid:args.openid, gender:args.gender, nickname:args.nickname, portrait:args.portrait};
         let multi = cache.multi();
         multi.hset("profile-entities", args.uid, JSON.stringify(profile_entities));
-        multi.sadd("profile", args.uid);
+        multi.lpush("profile", uid);
         multi.exec((err, replies) => {
           if (err) {
             log.error(err);
@@ -87,11 +85,11 @@ processor.call('setUserInfo', (db: PGClient, cache: RedisClient, done: DoneFunct
 function row2user(row) {
   return {
     id: row.id,
-    openid: row.openid,
+    openid: row.openid? row.openid.trim(): '',
     name: row.name? row.name.trim(): '',
     gender: row.gender? row.gender.trim(): '',
-    identity_no: row.identity_no,
-    phone: row.phone,
+    identity_no: row.identity_no? row.identity_no.trim(): '',
+    phone: row.phone? row.phone.trim(): '',
     nickname: row.nickname? row.nickname.trim(): '',
     portrait: row.portrait? row.portrait.trim(): '',
   };

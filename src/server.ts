@@ -30,6 +30,7 @@ let redis = Redis.createClient(6379, "redis"); // port, host
 
 let list_key = "profile";
 let entity_key = "profile-entities";
+let wxuser_key = "wxuser";
 
 let config: Config = {
   svraddr: hostmap.default["profile"],
@@ -40,39 +41,57 @@ let svc = new Server(config);
 
 let permissions: Permission[] = [['mobile', true], ['admin', true]];
 
+//获得当前用户信息
 svc.call('getUserInfo', permissions, (ctx: Context, rep: ResponseFunction ) => {
-  log.info('getUserInfo '+ ctx);
+  log.info('getUserInfo '+ ctx.uid);
     redis.hget(entity_key, ctx.uid, function (err, result) {
       if (err) {
-        rep([]);
+        rep({code:500, msg:[]});
       } else {
-        rep(JSON.parse(result));
+        rep({code:200, user:JSON.parse(result)});
       }
     });
 });
 
+//获取某个用户的openid
 svc.call('getUserOpenId', permissions, (ctx: Context, rep: ResponseFunction, uid:string) => {
-  log.info('getUserInfo' + uid);
-    redis.hget("wxuser", uid, function (err, result) {
-      if (err) {
-        rep([]);
-      } else {
-        rep(result);
-      }
-    });
+  log.info('getUserInfo, ctx.uid:' + ctx.uid +  " arg uid:" + uid);
+  redis.hget(wxuser_key, uid, function (err, result) {
+    if (err) {
+      rep({code:500, msg:[]});
+    } else {
+      rep({code:200, openid:result});
+    }
+  });
 });
 
-svc.call('setUserInfo', permissions, (ctx: Context, rep: ResponseFunction, openid:string, gender:string, nickname:string, portrait:string ) => {
-  log.info('setUserInfo %j', ctx);
-  let uid = uuid.v1();
-  let args = [uid, openid, gender, nickname, portrait]
-  ctx.msgqueue.send(msgpack.encode({cmd: "setUserInfo", args: args}));
+//添加用户信息
+svc.call('addUserInfo', permissions, (ctx: Context, rep: ResponseFunction, openid:string, gender:string, nickname:string, portrait:string ) => {
+  log.info('setUserInfo ' + ctx.uid);
+  let args = {openid, gender, nickname, portrait}
+  ctx.msgqueue.send(msgpack.encode({cmd: "addUserInfo", args: args}));
+  log.info('addUserInfo' + args);
+  rep({code:200, msg: 'sucessful'});
 });
 
+
+//refresh
 svc.call('refresh', permissions, (ctx: Context, rep: ResponseFunction) => {
-  log.info('refresh %j', ctx);
+  log.info('refresh ' + ctx.uid);
   ctx.msgqueue.send(msgpack.encode({cmd: "refresh", args: null}));
-  rep({status: 'okay'});
+  rep({code:200, msg: 'sucessful'});
+});
+
+//获取所有用户信息
+svc.call('getAllUsers', permissions, (ctx: Context, rep: ResponseFunction, start:number, limit:number) => {
+  log.info('getVehicleInfos' + "uid is " + ctx.uid);
+  redis.lrange(list_key, start, limit, function (err, result) {
+    if (err) {
+      rep({code:500, msg:[]});
+    } else {
+      ids2objects(entity_key, result, rep);
+    }
+  });
 });
 
 function ids2objects(key: string, ids: string[], rep: ResponseFunction) {
@@ -81,7 +100,12 @@ function ids2objects(key: string, ids: string[], rep: ResponseFunction) {
     multi.hget(key, id);
   }
   multi.exec(function(err, replies) {
-    rep(replies);
+    if (err) {
+      log.info("multi err: " + err);
+      rep({code:500, msg:[]});
+    }else{
+      rep({code:200, users:replies});
+    }
   });
 }
 
