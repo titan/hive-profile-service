@@ -5,7 +5,7 @@ CREATE TABLE users(
     name char(64),
     gender char(4),
     identity_no char(18),
-    phone char(11) NOT NULL,
+    phone char(11),
     nickname char(64),
     portrait char(1024)
 );
