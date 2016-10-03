@@ -39,7 +39,7 @@ let processor = new Processor(config);
 
 processor.call('refresh', (db: PGClient, cache: RedisClient, done: DoneFunction) => {
   log.info('refresh');
-  db.query('SELECT id, openid, name, gender, identity_no, phone, nickname, portrait FROM users', [], (err: Error, result: ResultSet) => {
+  db.query('SELECT id, openid, name, gender, identity_no, phone, nickname, portrait FROM users WHERE !deleted', [], (err: Error, result: ResultSet) => {
     if (err) {
       log.error(err, 'query error');
       done();
