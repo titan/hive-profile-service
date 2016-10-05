@@ -62,16 +62,16 @@ processor.call("refresh", (db: PGClient, cache: RedisClient, done: DoneFunction)
   });
 });
 
-processor.call("addUserInfo", (db: PGClient, cache: RedisClient, done: DoneFunction, args) => {
-  log.info("addUserInfo" + args);
+processor.call("addUserInfo", (db: PGClient, cache: RedisClient, done: DoneFunction, openid: string, gender: string, nickname: string, portrait: string) => {
+  log.info("addUserInfo");
   let uid = uuid.v1();
-  db.query("INSERT INTO users (id, openid, gender, nickname, portrait) VALUES ($1, $2, $3, $4 ,$5)", [uid, args.openid, args.gender, args.nickname, args.portrait], (err: Error) => {
+  db.query("INSERT INTO users (id, openid, gender, nickname, portrait) VALUES ($1, $2, $3, $4 ,$5)", [uid, openid, gender, nickname, portrait], (err: Error) => {
     if (err) {
       log.error(err, "query error");
     } else {
-      let profile_entities = { id: uid, openid: args.openid, gender: args.gender, nickname: args.nickname, portrait: args.portrait };
+      let profile_entities = { id: uid, openid: openid, gender: gender, nickname: nickname, portrait: portrait };
       let multi = cache.multi();
-      multi.hset("profile-entities", args.uid, JSON.stringify(profile_entities));
+      multi.hset("profile-entities", uid, JSON.stringify(profile_entities));
       multi.lpush("profile", uid);
       multi.exec((err, replies) => {
         if (err) {

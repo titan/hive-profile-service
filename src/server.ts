@@ -5,6 +5,7 @@ import * as nanomsg from "nanomsg";
 import * as http from "http";
 import * as msgpack from "msgpack-lite";
 import * as bunyan from "bunyan";
+import { verify, uuidVerifier, stringVerifier, arrayVerifier, numberVerifier } from "hive-verify";
 
 let log = bunyan.createLogger({
   name: "profile-server",
@@ -53,9 +54,37 @@ svc.call("getUserInfo", permissions, (ctx: Context, rep: ResponseFunction) => {
   });
 });
 
+// 根据userid获得某个用户信息
+svc.call("getUserInfoByUserId", permissions, (ctx: Context, rep: ResponseFunction, user_id: string) => {
+  log.info("getUserInfoByUserId " + ctx.uid);
+  if (!verify([uuidVerifier("user_id", user_id)], (errors: string[]) => {
+    rep({
+      code: 400,
+      msg: errors.join("\n")
+    });
+  })) {
+    return;
+  } 
+  redis.hget(entity_key, user_id, function(err, result) {
+    if (err || !result) {
+      rep({ code: 500, msg: err.message });
+    } else {
+      rep({ code: 200, user: JSON.parse(result) });
+    }
+  });
+});
+
 // 获取某个用户的openid
 svc.call("getUserOpenId", permissions, (ctx: Context, rep: ResponseFunction, uid: string) => {
   log.info("getUserInfo, ctx.uid:" + ctx.uid + " arg uid:" + uid);
+  if (!verify([uuidVerifier("uid", uid)], (errors: string[]) => {
+    rep({
+      code: 400,
+      msg: errors.join("\n")
+    });
+  })) {
+    return;
+  } 
   redis.hget(wxuser_key, uid, function(err, result) {
     if (err) {
       rep({ code: 500, msg: err.message });
@@ -68,7 +97,15 @@ svc.call("getUserOpenId", permissions, (ctx: Context, rep: ResponseFunction, uid
 // 添加用户信息
 svc.call("addUserInfo", permissions, (ctx: Context, rep: ResponseFunction, openid: string, gender: string, nickname: string, portrait: string) => {
   log.info("setUserInfo " + ctx.uid);
-  let args = { openid, gender, nickname, portrait };
+  if (!verify([stringVerifier("openid", openid)], (errors: string[]) => {
+    rep({
+      code: 400,
+      msg: errors.join("\n")
+    });
+  })) {
+    return;
+  } 
+  let args = [ openid, gender, nickname, portrait ];
   ctx.msgqueue.send(msgpack.encode({ cmd: "addUserInfo", args: args }));
   log.info("addUserInfo" + args);
   rep({ code: 200, msg: "sucessful" });
@@ -85,6 +122,14 @@ svc.call("refresh", permissions, (ctx: Context, rep: ResponseFunction) => {
 // 获取所有用户信息
 svc.call("getAllUsers", permissions, (ctx: Context, rep: ResponseFunction, start: number, limit: number) => {
   log.info("getAllUsers" + "uid is " + ctx.uid);
+  if (!verify([numberVerifier("start", start), numberVerifier("limit", limit)], (errors: string[]) => {
+    rep({
+      code: 400,
+      msg: errors.join("\n")
+    });
+  })) {
+    return;
+  } 
   redis.lrange(list_key, start, limit, function(err, result) {
     if (err) {
       rep({ code: 500, msg: err.message });
