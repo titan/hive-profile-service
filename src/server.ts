@@ -54,6 +54,26 @@ svc.call("getUserInfo", permissions, (ctx: Context, rep: ResponseFunction) => {
   });
 });
 
+// 根据userid获得某个用户信息
+svc.call("getUserInfoByUserId", permissions, (ctx: Context, rep: ResponseFunction, user_id: string) => {
+  log.info("getUserInfoByUserId " + ctx.uid);
+  if (!verify([uuidVerifier("user_id", user_id)], (errors: string[]) => {
+    rep({
+      code: 400,
+      msg: errors.join("\n")
+    });
+  })) {
+    return;
+  } 
+  redis.hget(entity_key, user_id, function(err, result) {
+    if (err || !result) {
+      rep({ code: 500, msg: err.message });
+    } else {
+      rep({ code: 200, user: JSON.parse(result) });
+    }
+  });
+});
+
 // 获取某个用户的openid
 svc.call("getUserOpenId", permissions, (ctx: Context, rep: ResponseFunction, uid: string) => {
   log.info("getUserInfo, ctx.uid:" + ctx.uid + " arg uid:" + uid);
