@@ -1,4 +1,4 @@
-import { Server, Config, Context, ResponseFunction, Permission } from "hive-server";
+import { Server, Config, Context, ResponseFunction, Permission, wait_for_response } from "hive-server";
 import { servermap } from "hive-hostmap";
 import * as Redis from "redis";
 import * as nanomsg from "nanomsg";
@@ -45,11 +45,11 @@ let permissions: Permission[] = [["mobile", true], ["admin", true]];
 // 获得当前用户信息
 svc.call("getUserInfo", permissions, (ctx: Context, rep: ResponseFunction) => {
   log.info("getUserInfo " + ctx.uid);
-  redis.hget(entity_key, ctx.uid, function(err, result) {
+  redis.hget(entity_key, ctx.uid, function (err, result) {
     if (err) {
       rep({ code: 500, msg: err.message });
     } else {
-      rep({ code: 200, user: JSON.parse(result) });
+      rep({ code: 200, data: JSON.parse(result) });
     }
   });
 });
@@ -64,12 +64,12 @@ svc.call("getUserInfoByUserId", permissions, (ctx: Context, rep: ResponseFunctio
     });
   })) {
     return;
-  } 
-  redis.hget(entity_key, user_id, function(err, result) {
+  }
+  redis.hget(entity_key, user_id, function (err, result) {
     if (err || !result) {
       rep({ code: 500, msg: err.message });
     } else {
-      rep({ code: 200, user: JSON.parse(result) });
+      rep({ code: 200, data: JSON.parse(result) });
     }
   });
 });
@@ -84,12 +84,12 @@ svc.call("getUserOpenId", permissions, (ctx: Context, rep: ResponseFunction, uid
     });
   })) {
     return;
-  } 
-  redis.hget(wxuser_key, uid, function(err, result) {
+  }
+  redis.hget(wxuser_key, uid, function (err, result) {
     if (err) {
       rep({ code: 500, msg: err.message });
     } else {
-      rep({ code: 200, openid: result });
+      rep({ code: 200, data: JSON.parse(result) });
     }
   });
 });
@@ -104,11 +104,12 @@ svc.call("addUserInfo", permissions, (ctx: Context, rep: ResponseFunction, openi
     });
   })) {
     return;
-  } 
-  let args = [ openid, gender, nickname, portrait ];
+  }
+
+  let args = [openid, gender, nickname, portrait];
+  let callback = openid;
   ctx.msgqueue.send(msgpack.encode({ cmd: "addUserInfo", args: args }));
-  log.info("addUserInfo" + args);
-  rep({ code: 200, msg: "sucessful" });
+  wait_for_response(ctx.cache, callback, rep);
 });
 
 
@@ -116,7 +117,7 @@ svc.call("addUserInfo", permissions, (ctx: Context, rep: ResponseFunction, openi
 svc.call("refresh", permissions, (ctx: Context, rep: ResponseFunction) => {
   log.info("refresh " + ctx.uid);
   ctx.msgqueue.send(msgpack.encode({ cmd: "refresh", args: null }));
-  rep({ code: 200, msg: "sucessful" });
+  rep({ code: 200, data: "sucessful" });
 });
 
 // 获取所有用户信息
@@ -129,8 +130,8 @@ svc.call("getAllUsers", permissions, (ctx: Context, rep: ResponseFunction, start
     });
   })) {
     return;
-  } 
-  redis.lrange(list_key, start, limit, function(err, result) {
+  }
+  redis.lrange(list_key, start, limit, function (err, result) {
     if (err) {
       rep({ code: 500, msg: err.message });
     } else {
@@ -145,12 +146,12 @@ function ids2objects(key: string, ids: string[], rep: ResponseFunction) {
   for (let id of ids) {
     multi.hget(key, id);
   }
-  multi.exec(function(err, replies) {
+  multi.exec(function (err, replies) {
     if (err) {
       log.info("multi err: " + err);
       rep({ code: 500, msg: err.message });
     } else {
-      rep({ code: 200, users: replies });
+      rep({ code: 200, data: replies });
     }
   });
 }
