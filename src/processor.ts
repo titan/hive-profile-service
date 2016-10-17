@@ -66,9 +66,8 @@ processor.call("refresh", (db: PGClient, cache: RedisClient, done: DoneFunction)
   });
 });
 
-processor.call("addUserInfo", (db: PGClient, cache: RedisClient, done: DoneFunction, openid: string, gender: string, nickname: string, portrait: string, callback: string) => {
+processor.call("addUserInfo", (db: PGClient, cache: RedisClient, done: DoneFunction, uid: string, openid: string, gender: string, nickname: string, portrait: string, callback: string) => {
   log.info(`addUserInfo openid: ${openid}, gender: ${gender}, nickname: ${nickname}, portrait: ${portrait}, callback: ${callback}`);
-  let uid = uuid.v1();
   db.query("INSERT INTO users (id, openid, gender, nickname, portrait) VALUES ($1, $2, $3, $4 ,$5)", [uid, openid, gender, nickname, portrait], (err: Error) => {
     if (err) {
       log.error(err, "insert into DB 'users' error!");
