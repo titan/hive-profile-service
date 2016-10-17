@@ -106,7 +106,7 @@ svc.call("addUserInfo", permissions, (ctx: Context, rep: ResponseFunction, openi
     return;
   }
 
-  let args = [openid, gender, nickname, portrait];
+  let args = [ctx.uid, openid, gender, nickname, portrait];
   let callback = openid;
   ctx.msgqueue.send(msgpack.encode({ cmd: "addUserInfo", args: args }));
   wait_for_response(ctx.cache, callback, rep);
