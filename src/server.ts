@@ -42,18 +42,6 @@ let svc = new Server(config);
 
 let permissions: Permission[] = [["mobile", true], ["admin", true]];
 
-// 获得当前用户信息
-svc.call("getUserInfo", permissions, (ctx: Context, rep: ResponseFunction) => {
-  log.info("getUserInfo " + ctx.uid);
-  redis.hget(entity_key, ctx.uid, function (err, result) {
-    if (err) {
-      rep({ code: 500, msg: err.message });
-    } else {
-      rep({ code: 200, data: JSON.parse(result) });
-    }
-  });
-});
-
 // 根据userid获得某个用户信息
 svc.call("getUserInfoByUserId", permissions, (ctx: Context, rep: ResponseFunction, user_id: string) => {
   log.info("getUserInfoByUserId " + ctx.uid);
@@ -67,6 +55,18 @@ svc.call("getUserInfoByUserId", permissions, (ctx: Context, rep: ResponseFunctio
   }
   redis.hget(entity_key, user_id, function (err, result) {
     if (err || !result) {
+      rep({ code: 500, msg: err.message });
+    } else {
+      rep({ code: 200, data: JSON.parse(result) });
+    }
+  });
+});
+
+// 获得当前用户信息
+svc.call("getUserInfo", permissions, (ctx: Context, rep: ResponseFunction) => {
+  log.info("getUserInfo " + ctx.uid);
+  redis.hget(entity_key, ctx.uid, function (err, result) {
+    if (err) {
       rep({ code: 500, msg: err.message });
     } else {
       rep({ code: 200, data: JSON.parse(result) });
@@ -89,15 +89,15 @@ svc.call("getUserOpenId", permissions, (ctx: Context, rep: ResponseFunction, uid
     if (err) {
       rep({ code: 500, msg: err.message });
     } else {
-      rep({ code: 200, data: JSON.parse(result) });
+      rep({ code: 200, data: result });
     }
   });
 });
 
 // 添加用户信息
-svc.call("addUserInfo", permissions, (ctx: Context, rep: ResponseFunction, openid: string, gender: string, nickname: string, portrait: string) => {
+svc.call("addUserInfo", permissions, (ctx: Context, rep: ResponseFunction, uid: string, openid: string, gender: string, nickname: string, portrait: string) => {
   log.info("setUserInfo " + ctx.uid);
-  if (!verify([stringVerifier("openid", openid)], (errors: string[]) => {
+  if (!verify([uuidVerifier("uuid", uid), stringVerifier("openid", openid)], (errors: string[]) => {
     rep({
       code: 400,
       msg: errors.join("\n")
@@ -105,11 +105,10 @@ svc.call("addUserInfo", permissions, (ctx: Context, rep: ResponseFunction, openi
   })) {
     return;
   }
-
-  let args = [ctx.uid, openid, gender, nickname, portrait];
-  let callback = openid;
+  let args = [uid, openid, gender, nickname, portrait];
   ctx.msgqueue.send(msgpack.encode({ cmd: "addUserInfo", args: args }));
-  wait_for_response(ctx.cache, callback, rep);
+  log.info("addUserInfo" + args);
+  rep({ code: 200, msg: "sucessful" });
 });
 
 
