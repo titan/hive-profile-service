@@ -89,7 +89,7 @@ svc.call("getUserOpenId", permissions, (ctx: Context, rep: ResponseFunction, uid
     if (err) {
       rep({ code: 500, msg: err.message });
     } else {
-      rep({ code: 200, data: JSON.parse(result) });
+      rep({ code: 200, data: result });
     }
   });
 });
