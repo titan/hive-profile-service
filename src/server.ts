@@ -43,8 +43,8 @@ let svc = new Server(config);
 let permissions: Permission[] = [["mobile", true], ["admin", true]];
 
 // 获得当前用户信息
-svc.call("getUserInfo", permissions, (ctx: Context, rep: ResponseFunction) => {
-  log.info("getUserInfo " + ctx.uid);
+svc.call("getUser", permissions, (ctx: Context, rep: ResponseFunction) => {
+  log.info("getUser " + ctx.uid);
   redis.hget(entity_key, ctx.uid, function (err, result) {
     if (err) {
       rep({ code: 500, msg: err.message });
@@ -55,8 +55,8 @@ svc.call("getUserInfo", permissions, (ctx: Context, rep: ResponseFunction) => {
 });
 
 // 根据userid获得某个用户信息
-svc.call("getUserInfoByUserId", permissions, (ctx: Context, rep: ResponseFunction, user_id: string) => {
-  log.info("getUserInfoByUserId " + ctx.uid);
+svc.call("getUserByUserId", permissions, (ctx: Context, rep: ResponseFunction, user_id: string) => {
+  log.info("getUserByUserId " + ctx.uid);
   if (!verify([uuidVerifier("user_id", user_id)], (errors: string[]) => {
     rep({
       code: 400,
@@ -76,7 +76,7 @@ svc.call("getUserInfoByUserId", permissions, (ctx: Context, rep: ResponseFunctio
 
 // 获取某个用户的openid
 svc.call("getUserOpenId", permissions, (ctx: Context, rep: ResponseFunction, uid: string) => {
-  log.info("getUserInfo, ctx.uid:" + ctx.uid + " arg uid:" + uid);
+  log.info("getUserOpenId, ctx.uid:" + ctx.uid + " arg uid:" + uid);
   if (!verify([uuidVerifier("uid", uid)], (errors: string[]) => {
     rep({
       code: 400,
@@ -89,27 +89,9 @@ svc.call("getUserOpenId", permissions, (ctx: Context, rep: ResponseFunction, uid
     if (err) {
       rep({ code: 500, msg: err.message });
     } else {
-      rep({ code: 200, data: JSON.parse(result) });
+      rep({ code: 200, data: result });
     }
   });
-});
-
-// 添加用户信息
-svc.call("addUserInfo", permissions, (ctx: Context, rep: ResponseFunction, openid: string, gender: string, nickname: string, portrait: string) => {
-  log.info("setUserInfo " + ctx.uid);
-  if (!verify([stringVerifier("openid", openid)], (errors: string[]) => {
-    rep({
-      code: 400,
-      msg: errors.join("\n")
-    });
-  })) {
-    return;
-  }
-
-  let args = [ctx.uid, openid, gender, nickname, portrait];
-  let callback = openid;
-  ctx.msgqueue.send(msgpack.encode({ cmd: "addUserInfo", args: args }));
-  wait_for_response(ctx.cache, callback, rep);
 });
 
 
@@ -155,6 +137,32 @@ function ids2objects(key: string, ids: string[], rep: ResponseFunction) {
     }
   });
 }
+
+// 根据userid数组获得一些用户信息
+svc.call("getUserByUserIds", permissions, (ctx: Context, rep: ResponseFunction, user_ids) => {
+  log.info("getUserByUserIds " + ctx.uid);
+  let multi = redis.multi();
+  for (let user_id of user_ids) {
+    multi.hget(entity_key, user_id);
+  }
+  multi.exec((err, result) => {
+    if (err) {
+      log.info(err);
+      rep({ code: 500, msg: err.message });
+    } else if (result) {
+      log.info(result.map(e => JSON.parse(e)));
+      let users = result.map(e => JSON.parse(e));
+      let replies = {};
+      for(let user of users){
+        replies[user.id] = user;
+      }
+      rep({ code: 200, data: replies });
+    } else {
+      log.info("not found users");
+      rep({ code: 404, msg: "not found users" })
+    }
+  });
+});
 
 log.info("Start server at %s and connect to %s", config.svraddr, config.msgaddr);
 
