@@ -94,7 +94,6 @@ svc.call("getUserOpenId", permissions, (ctx: Context, rep: ResponseFunction, uid
   });
 });
 
-
 // refresh
 svc.call("refresh", permissions, (ctx: Context, rep: ResponseFunction) => {
   log.info("refresh " + ctx.uid);
