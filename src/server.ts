@@ -48,8 +48,10 @@ svc.call("getUser", permissions, (ctx: Context, rep: ResponseFunction) => {
   redis.hget(entity_key, ctx.uid, function (err, result) {
     if (err) {
       rep({ code: 500, msg: err.message });
-    } else {
+    } else if(result){
       rep({ code: 200, data: JSON.parse(result) });
+    } else {
+      rep({ code: 404, msg: "not found user" });
     }
   });
 });
