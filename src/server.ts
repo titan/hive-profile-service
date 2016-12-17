@@ -41,6 +41,12 @@ let svc = new Server(config);
 
 let permissions: Permission[] = [["mobile", true], ["admin", true]];
 
+const tickets = [
+  "gQHw7joAAAAAAAAAASxodHRwOi8vd2VpeGluLnFxLmNvbS9xL3F6bUxVMXJsbmlubkZhdXFPaFZkAAIEfynlVwMEAAAAAA==",
+];
+
+
+
 // 获得当前用户信息
 svc.call("getUser", permissions, (ctx: Context, rep: ResponseFunction) => {
   log.info("getUser " + ctx.uid);
@@ -54,6 +60,30 @@ svc.call("getUser", permissions, (ctx: Context, rep: ResponseFunction) => {
     }
   });
 });
+
+svc.call("getDiscountStatus", permissions, (ctx: Context, rep: ResponseFunction) => {
+  log.info("getDiscountStatus " + ctx.uid);
+  ctx.cache.hget(entity_key, ctx.uid, function (err, result) {
+    if (err) {
+      rep({ code: 500, msg: err.message });
+    } else if (result) {
+      const user = JSON.parse(result);
+      if (user["ticket"] && user["ticket"] !== "") {
+        for (let ticket of tickets) {
+          if (user["ticket"] === ticket) {
+            rep({ code: 200, data: true });
+          }
+        }
+        rep({ code: 200, data: false });
+      } else {
+        rep({ code: 200, data: false });
+      }
+    } else {
+      rep({ code: 404, msg: "not found user" });
+    }
+  });
+});
+
 
 svc.call("getUserForInvite", permissions, (ctx: Context, rep: ResponseFunction, key: string) => {
   log.info("getUserForInvite " + key);
