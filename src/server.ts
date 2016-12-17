@@ -27,15 +27,14 @@ let log = bunyan.createLogger({
   ]
 });
 
-let redis = Redis.createClient(6379, "redis"); // port, host
-
 let list_key = "profile";
 let entity_key = "profile-entities";
 let wxuser_key = "wxuser";
 
 let config: Config = {
   svraddr: servermap["profile"],
-  msgaddr: "ipc:///tmp/profile.ipc"
+  msgaddr: "ipc:///tmp/profile.ipc",
+  cacheaddr: process.env["CACHE_HOST"]
 };
 
 let svc = new Server(config);
@@ -45,16 +44,37 @@ let permissions: Permission[] = [["mobile", true], ["admin", true]];
 // 获得当前用户信息
 svc.call("getUser", permissions, (ctx: Context, rep: ResponseFunction) => {
   log.info("getUser " + ctx.uid);
-  redis.hget(entity_key, ctx.uid, function (err, result) {
+  ctx.cache.hget(entity_key, ctx.uid, function (err, result) {
     if (err) {
       rep({ code: 500, msg: err.message });
-    } else if(result){
+    } else if (result) {
       rep({ code: 200, data: JSON.parse(result) });
     } else {
       rep({ code: 404, msg: "not found user" });
     }
   });
 });
+
+svc.call("getUserForInvite", permissions, (ctx: Context, rep: ResponseFunction, key: string) => {
+  log.info("getUserForInvite " + key);
+  ctx.cache.get("InviteKey:" + key, function (err, result) {
+    if (err) {
+      rep({ code: 500, msg: err.message });
+    } else if (result) {
+      ctx.cache.hget(entity_key, result, function (err2, result2) {
+        if (err2) {
+          rep({ code: 500, msg: err2.message });
+        } else if (result2) {
+          rep({ code: 200, data: JSON.parse(result2) });
+        } else {
+          rep({ code: 404, msg: "not found user" });
+        }
+      });
+    } else {
+      rep({ code: 404, msg: "not found invitekey" });
+    }
+  });
+})
 
 // 根据userid获得某个用户信息
 svc.call("getUserByUserId", permissions, (ctx: Context, rep: ResponseFunction, user_id: string) => {
@@ -67,7 +87,7 @@ svc.call("getUserByUserId", permissions, (ctx: Context, rep: ResponseFunction, u
   })) {
     return;
   }
-  redis.hget(entity_key, user_id, function (err, result) {
+  ctx.cache.hget(entity_key, user_id, function (err, result) {
     if (err || !result) {
       rep({ code: 500, msg: err.message });
     } else {
@@ -87,7 +107,7 @@ svc.call("getUserOpenId", permissions, (ctx: Context, rep: ResponseFunction, uid
   })) {
     return;
   }
-  redis.hget(wxuser_key, uid, function (err, result) {
+  ctx.cache.hget(wxuser_key, uid, function (err, result) {
     if (err) {
       rep({ code: 500, msg: err.message });
     } else {
@@ -114,18 +134,18 @@ svc.call("getAllUsers", permissions, (ctx: Context, rep: ResponseFunction, start
   })) {
     return;
   }
-  redis.lrange(list_key, start, limit, function (err, result) {
+  ctx.cache.lrange(list_key, start, limit, function (err, result) {
     if (err) {
       rep({ code: 500, msg: err.message });
     } else {
       log.info("getAllUsers result" + result);
-      ids2objects(entity_key, result, rep);
+      ids2objects(ctx, entity_key, result, rep);
     }
   });
 });
 
-function ids2objects(key: string, ids: string[], rep: ResponseFunction) {
-  let multi = redis.multi();
+function ids2objects(ctx: Context, key: string, ids: string[], rep: ResponseFunction) {
+  let multi = ctx.cache.multi();
   for (let id of ids) {
     multi.hget(key, id);
   }
@@ -142,7 +162,7 @@ function ids2objects(key: string, ids: string[], rep: ResponseFunction) {
 // 根据userid数组获得一些用户信息
 svc.call("getUserByUserIds", permissions, (ctx: Context, rep: ResponseFunction, user_ids) => {
   log.info("getUserByUserIds " + ctx.uid);
-  let multi = redis.multi();
+  let multi = ctx.cache.multi();
   for (let user_id of user_ids) {
     multi.hget(entity_key, user_id);
   }
@@ -154,7 +174,7 @@ svc.call("getUserByUserIds", permissions, (ctx: Context, rep: ResponseFunction, 
       log.info(result.map(e => JSON.parse(e)));
       let users = result.map(e => JSON.parse(e));
       let replies = {};
-      for(let user of users){
+      for (let user of users) {
         replies[user.id] = user;
       }
       rep({ code: 200, data: replies });
