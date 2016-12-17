@@ -38,7 +38,7 @@ let processor = new Processor(config);
 
 processor.call("refresh", (db: PGClient, cache: RedisClient, done: DoneFunction) => {
   log.info("refresh");
-  db.query("SELECT id, openid, name, gender, identity_no, phone, nickname, portrait FROM users", [], (err: Error, result: ResultSet) => {
+  db.query("SELECT id, openid, name, gender, identity_no, phone, nickname, portrait, pnrid, ticket, created_at, updated_at FROM users", [], (err: Error, result: ResultSet) => {
     if (err) {
       log.error(err, "query error");
       done();
@@ -50,8 +50,17 @@ processor.call("refresh", (db: PGClient, cache: RedisClient, done: DoneFunction)
     log.info("users:" + users);
     let multi = cache.multi();
     for (let user of users) {
-      multi.hset("profile-entities", user.id, JSON.stringify(user));
-      multi.lpush("profile", user.id);
+      multi.hset("profile-entities", user["id"], JSON.stringify(user));
+      multi.hset("pnrid-uid", user["pnrid"], user["id"]);
+      multi.lpush("profile", user["id"]);
+      multi.hset("wxuser", user["id"], user["openid"]);
+      multi.hset("wxuser", user["openid"], user["id"]);
+      let ticket_entities = {
+        openid: user["openid"],
+        ticket: user["ticket"],
+        CreateTime: user["updated_at"]
+      }
+      multi.hset("openid_ticket", user["openid"], JSON.stringify(ticket_entities));
     }
     multi.exec((err, replies) => {
       if (err) {
@@ -59,27 +68,6 @@ processor.call("refresh", (db: PGClient, cache: RedisClient, done: DoneFunction)
       }
       done();
     });
-  });
-});
-
-processor.call("addUserInfo", (db: PGClient, cache: RedisClient, done: DoneFunction, openid: string, gender: string, nickname: string, portrait: string) => {
-  log.info("addUserInfo");
-  let uid = uuid.v1();
-  db.query("INSERT INTO users (id, openid, gender, nickname, portrait) VALUES ($1, $2, $3, $4 ,$5)", [uid, openid, gender, nickname, portrait], (err: Error) => {
-    if (err) {
-      log.error(err, "query error");
-    } else {
-      let profile_entities = { id: uid, openid: openid, gender: gender, nickname: nickname, portrait: portrait };
-      let multi = cache.multi();
-      multi.hset("profile-entities", uid, JSON.stringify(profile_entities));
-      multi.lpush("profile", uid);
-      multi.exec((err, replies) => {
-        if (err) {
-          log.error(err);
-        }
-        done();
-      });
-    }
   });
 });
 
@@ -93,6 +81,10 @@ function row2user(row) {
     phone: row.phone ? row.phone.trim() : "",
     nickname: row.nickname ? row.nickname.trim() : "",
     portrait: row.portrait ? row.portrait.trim() : "",
+    pnrid: row.pnrid ? row.pnrid.trim() : "",
+    ticket: row.ticket? row.ticket.trim() : "",
+    created_at: row.created_at,
+    updated_at: row.updated_at,
   };
 }
 
