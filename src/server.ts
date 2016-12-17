@@ -49,7 +49,7 @@ svc.call("getUserInfo", permissions, (ctx: Context, rep: ResponseFunction) => {
     if (err) {
       rep({ code: 500, msg: err.message });
     } else {
-      rep({ code: 200, user: JSON.parse(result) });
+      rep({ code: 200, data: JSON.parse(result) });
     }
   });
 });
@@ -69,7 +69,7 @@ svc.call("getUserInfoByUserId", permissions, (ctx: Context, rep: ResponseFunctio
     if (err || !result) {
       rep({ code: 500, msg: err.message });
     } else {
-      rep({ code: 200, user: JSON.parse(result) });
+      rep({ code: 200, data: JSON.parse(result) });
     }
   });
 });
@@ -89,7 +89,7 @@ svc.call("getUserOpenId", permissions, (ctx: Context, rep: ResponseFunction, uid
     if (err) {
       rep({ code: 500, msg: err.message });
     } else {
-      rep({ code: 200, openid: result });
+      rep({ code: 200, data: result });
     }
   });
 });
@@ -108,7 +108,7 @@ svc.call("addUserInfo", permissions, (ctx: Context, rep: ResponseFunction, openi
   let args = [ openid, gender, nickname, portrait ];
   ctx.msgqueue.send(msgpack.encode({ cmd: "addUserInfo", args: args }));
   log.info("addUserInfo" + args);
-  rep({ code: 200, msg: "sucessful" });
+  rep({ code: 200, data: "sucessful" });
 });
 
 
@@ -116,7 +116,7 @@ svc.call("addUserInfo", permissions, (ctx: Context, rep: ResponseFunction, openi
 svc.call("refresh", permissions, (ctx: Context, rep: ResponseFunction) => {
   log.info("refresh " + ctx.uid);
   ctx.msgqueue.send(msgpack.encode({ cmd: "refresh", args: null }));
-  rep({ code: 200, msg: "sucessful" });
+  rep({ code: 200, data: "sucessful" });
 });
 
 // 获取所有用户信息
@@ -150,7 +150,7 @@ function ids2objects(key: string, ids: string[], rep: ResponseFunction) {
       log.info("multi err: " + err);
       rep({ code: 500, msg: err.message });
     } else {
-      rep({ code: 200, users: replies });
+      rep({ code: 200, data: replies });
     }
   });
 }
