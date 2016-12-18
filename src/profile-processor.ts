@@ -57,6 +57,8 @@ processor.call("refresh", (ctx: ProcessorContext, callback: string) => {
         multi.hset("openid_ticket", user["openid"], pkt2);
       }
       await multi.execAsync();
+      await set_for_response(cache, callback, { code: 200, data: "success" });
+      done()
     } catch (e) {
       log.error(e);
       set_for_response(cache, callback, { code: 500, msg: e.message }).then(_ => {
