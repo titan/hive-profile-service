@@ -1,4 +1,4 @@
-import { Server, ServerContext, ServerFunction, CmdPacket, Permission, wait_for_response, msgpack_decode, msgpack_encode } from "hive-service";
+import { Server, ServerContext, ServerFunction, CmdPacket, Permission, wait_for_response, msgpack_decode, msgpack_encode, rpc } from "hive-service";
 import * as Redis from "redis";
 import { Client as PGClient } from "pg";
 import * as http from "http";
@@ -49,7 +49,9 @@ const mobileOnly: Permission[] = [["mobile", true], ["admin", false]];
 const adminOnly: Permission[] = [["mobile", false], ["admin", true]];
 
 const tickets = [
-  "gQHw7joAAAAAAAAAASxodHRwOi8vd2VpeGluLnFxLmNvbS9xL3F6bUxVMXJsbmlubkZhdXFPaFZkAAIEfynlVwMEAAAAAA==",
+  "10086",
+  "王阿菠",
+  "张雅娟"
 ];
 
 server.call("getUser", allowAll, "获得当前用户信息", "获得当前用户信息", (ctx: ServerContext, rep: ((result: any) => void)) => {
@@ -73,7 +75,7 @@ server.call("getUser", allowAll, "获得当前用户信息", "获得当前用户
   });
 });
 
-server.call("getDiscountStatus", allowAll, "获得当前用户信息", "获得当前用户信息", (ctx: ServerContext, rep: ((result: any) => void)) => {
+server.call("getDiscountStatus", allowAll, "获得当前用户信息", "获得当前用户优惠情况", (ctx: ServerContext, rep: ((result: any) => void), recommend: string) => {
   log.info("getDiscountStatus " + ctx.uid);
   ctx.cache.hget(entity_key, ctx.uid, function (err, result) {
     if (err) {
@@ -86,9 +88,22 @@ server.call("getDiscountStatus", allowAll, "获得当前用户信息", "获得�
             for (let ticket of tickets) {
               if (user["ticket"] === ticket) {
                 rep({ code: 200, data: true });
+                return;
+              } else if (recommend && recommend !== "") {
+                if (recommend === ticket) {
+                  rep({ code: 200, data: true });
+                  return;
+                }
               }
             }
             rep({ code: 200, data: false });
+          } else if (recommend && recommend !== "") {
+            for (let ticket of tickets) {
+              if (recommend === ticket) {
+                rep({ code: 200, data: true });
+                return;
+              }
+            }
           } else {
             rep({ code: 200, data: false });
           }
@@ -103,7 +118,7 @@ server.call("getDiscountStatus", allowAll, "获得当前用户信息", "获得�
   });
 });
 
-server.call("getUserForInvite", allowAll, "二维码", "二维码", (ctx: ServerContext, rep: ((result: any) => void), key: string) => {
+server.call("getUserForInvite", allowAll, "获取邀请好友信息", "获取邀请好友信息", (ctx: ServerContext, rep: ((result: any) => void), key: string) => {
   log.info("getUserForInvite " + key);
   ctx.cache.get("InviteKey:" + key, function (err, result) {
     if (err) {
