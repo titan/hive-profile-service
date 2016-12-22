@@ -49,10 +49,14 @@ const mobileOnly: Permission[] = [["mobile", true], ["admin", false]];
 const adminOnly: Permission[] = [["mobile", false], ["admin", true]];
 
 const tickets = [
-  "10086",
-  "王阿菠",
-  "张雅娟"
+  "gQH57zoAAAAAAAAAASxodHRwOi8vd2VpeGluLnFxLmNvbS9xL1REbklHUDdtOGJHSV9pS3k4QldyAAIEMGApWAMEAAAAAA==",
+  "gQHa8DoAAAAAAAAAASxodHRwOi8vd2VpeGluLnFxLmNvbS9xLzN6bDFNQ1BtVExFMW5MR2FUUldyAAIE1ugfWAMEAAAAAA==",
+  "gQFw7zoAAAAAAAAAASxodHRwOi8vd2VpeGluLnFxLmNvbS9xL0pqbFZKZ1BtUzdFeVUwaXJiUldyAAIELnEdWAMEAAAAAA==",
+  "gQFw7zoAAAAAAAAAASxodHRwOi8vd2VpeGluLnFxLmNvbS9xL0pqbFZKZ1BtUzdFeVUwaXJiUldyAAIELnEdWAMEAAAAAA==",
+  "gQE78DoAAAAAAAAAASxodHRwOi8vd2VpeGluLnFxLmNvbS9xL1BUbGtSc1RtUkxFOTcxUDFYQldyAAIEMFEQWAMEAAAAAA==",
+  "gQFA8DoAAAAAAAAAASxodHRwOi8vd2VpeGluLnFxLmNvbS9xL1l6a0RDb1htRHJGM3ZBMlVPeFdyAAIEJ9z9VwMEAAAAAA=="
 ];
+
 
 server.call("getUser", allowAll, "获得当前用户信息", "获得当前用户信息", (ctx: ServerContext, rep: ((result: any) => void)) => {
   log.info("getUser " + ctx.uid);
