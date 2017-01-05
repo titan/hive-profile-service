@@ -1,9 +1,8 @@
 import { Server, ServerContext, ServerFunction, CmdPacket, Permission, wait_for_response, msgpack_decode, msgpack_encode, rpc } from "hive-service";
 import * as Redis from "redis";
 import { Client as PGClient } from "pg";
-import * as http from "http";
 import * as bunyan from "bunyan";
-import { verify, uuidVerifier, stringVerifier, arrayVerifier, numberVerifier } from "hive-verify";
+import { verify, uuidVerifier, stringVerifier, arrayVerifier, numberVerifier, booleanVerifier } from "hive-verify";
 import * as uuid from "node-uuid";
 
 let log = bunyan.createLogger({
@@ -266,3 +265,30 @@ server.call("getUserByUserIds", allowAll, "根据userid数组获得一些用户�
   });
 });
 
+server.call("setTenderOpened", allowAll, "设置开通自动投标标志", "设置开通自动投标标志", (ctx: ServerContext, rep: ((result: any) => void), flag: boolean, uid?: string) => {
+  if (uid) {
+    log.info(`setTenderOpened, flag: ${flag}, uid: ${uid}`);
+    if (!verify([booleanVerifier("flag", flag), uuidVerifier("uid", uid)], (errors: string[]) => {
+      rep({
+        code: 400,
+        msg: errors.join("\n")
+      });
+    })) {
+      return;
+    }
+  } else {
+    log.info(`setTenderOpened, flag: ${flag}`);
+    if (!verify([booleanVerifier("flag", flag), uuidVerifier("uid", ctx.uid)], (errors: string[]) => {
+      rep({
+        code: 400,
+        msg: errors.join("\n")
+      });
+    })) {
+      return;
+    }
+  }
+  const cbflag = uuid.v1();
+  const pkt: CmdPacket = { cmd: "setTenderOpened", args: uid ? [flag, cbflag, uid] : [flag, cbflag, ctx.uid] };
+  ctx.publish(pkt);
+  wait_for_response(ctx.cache, cbflag, rep);
+});

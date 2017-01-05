@@ -2,8 +2,7 @@ import { Processor, ProcessorFunction, ProcessorContext, rpc, set_for_response, 
 import { Client as PGClient, QueryResult } from "pg";
 import { RedisClient, Multi } from "redis";
 import * as bunyan from "bunyan";
-import * as uuid from "node-uuid";
-import * as http from "http";
+import * as uuid from "uuid";
 import * as bluebird from "bluebird";
 
 let log = bunyan.createLogger({
@@ -59,6 +58,31 @@ processor.call("refresh", (ctx: ProcessorContext, cbflag: string, uid?: string) 
   const done = ctx.done;
   (async () => {
     try {
+      await sync_users(db, cache, uid);
+      await set_for_response(cache, cbflag, { code: 200, data: "success" });
+      done();
+    } catch (e) {
+      log.error(e);
+      done();
+      set_for_response(cache, cbflag, { code: 500, msg: e.message });
+    }
+  })();
+});
+
+processor.call("setTenderOpened", (ctx: ProcessorContext, flag: boolean, cbflag: string, uid: string) => {
+  log.info(`setTenderOpened flag: ${flag}, cbflag: ${cbflag}, uid: ${uid}`);
+  const db: PGClient = ctx.db;
+  const cache: RedisClient = ctx.cache;
+  const done = ctx.done;
+  (async () => {
+    try {
+      const result = await db.query("SELECT count(1) FROM users WHERE id = $1", [uid]);
+      if (result.rows[0].count == 0) {
+        await set_for_response(cache, cbflag, { code: 404, msg: "User not found" });
+        done();
+        return;
+      }
+      await db.query("UPDATE users SET tender_opened = $1 WHERE id = $2", [flag, uid]);
       await sync_users(db, cache, uid);
       await set_for_response(cache, cbflag, { code: 200, data: "success" });
       done();
