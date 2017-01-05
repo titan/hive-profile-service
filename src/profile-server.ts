@@ -6,18 +6,6 @@ import * as bunyan from "bunyan";
 import { verify, uuidVerifier, stringVerifier, arrayVerifier, numberVerifier } from "hive-verify";
 import * as uuid from "node-uuid";
 
-declare module "redis" {
-  export interface RedisClient extends NodeJS.EventEmitter {
-    hgetAsync(key: string, field: string): Promise<any>;
-    hincrbyAsync(key: string, field: string, value: number): Promise<any>;
-    setexAsync(key: string, ttl: number, value: string): Promise<any>;
-    zrevrangebyscoreAsync(key: string, start: number, stop: number): Promise<any>;
-  }
-  export interface Multi extends NodeJS.EventEmitter {
-    execAsync(): Promise<any>;
-  }
-}
-
 let log = bunyan.createLogger({
   name: "profile-server",
   streams: [
@@ -80,7 +68,7 @@ server.call("getUser", allowAll, "获得当前用户信息", "获得当前用户
   });
 });
 
-server.call("getDiscountStatus", allowAll, "获得当前用户信息", "获得当前用户优惠情况", (ctx: ServerContext, rep: ((result: any) => void), recommend: string) => {
+server.call("getDiscountStatus", allowAll, "获得当前用户优惠情况", "获得当前用户优惠情况", (ctx: ServerContext, rep: ((result: any) => void), recommend: string) => {
   log.info("getDiscountStatus " + ctx.uid);
   ctx.cache.hget(entity_key, ctx.uid, function (err, result) {
     if (err) {
@@ -179,31 +167,24 @@ server.call("getUserByUserId", allowAll, "根据userid获得某个用户信息",
   });
 });
 
-server.call("getUserOpenId", allowAll, "获取某个用户的openid", "获取某个用户的openid", (ctx: ServerContext, rep: ((result: any) => void), uid: string) => {
-  log.info("getUserOpenId, ctx.uid:" + ctx.uid + " arg uid:" + uid);
-  if (!verify([uuidVerifier("uid", uid)], (errors: string[]) => {
-    rep({
-      code: 400,
-      msg: errors.join("\n")
-    });
-  })) {
-    return;
-  }
-  ctx.cache.hget(wxuser_key, uid, function (err, result) {
-    if (err) {
-      rep({ code: 500, msg: err.message });
-    } else {
-      rep({ code: 200, data: result });
+server.call("refresh", adminOnly, "refresh", "refresh", (ctx: ServerContext, rep: ((result: any) => void), uid?: string) => {
+  if (uid) {
+    log.info(`refresh ${uid}`);
+    if (!verify([uuidVerifier("uid", uid)], (errors: string[]) => {
+      rep({
+        code: 400,
+        msg: errors.join("\n")
+      });
+    })) {
+      return;
     }
-  });
-});
-
-server.call("refresh", allowAll, "refresh", "refresh", (ctx: ServerContext, rep: ((result: any) => void)) => {
-  log.info("refresh " + ctx.uid);
-  const callback = uuid.v1();
-  const pkt: CmdPacket = { cmd: "refresh", args: [callback] };
+  } else {
+    log.info(`refresh`);
+  }
+  const cbflag = uuid.v1();
+  const pkt: CmdPacket = { cmd: "refresh", args: uid ? [cbflag, uid] : [cbflag] };
   ctx.publish(pkt);
-  wait_for_response(ctx.cache, callback, rep);
+  wait_for_response(ctx.cache, cbflag, rep);
 });
 
 server.call("getAllUsers", allowAll, "获取所有用户信息", "获取所有用户信息", (ctx: ServerContext, rep: ((result: any) => void), start: number, limit: number) => {

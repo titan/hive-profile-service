@@ -28,45 +28,44 @@ let log = bunyan.createLogger({
 
 export const processor = new Processor();
 
-processor.call("refresh", (ctx: ProcessorContext, callback: string) => {
-  log.info("refresh");
+async function sync_users(db: PGClient, cache: RedisClient, uid?: string): Promise<any> {
+  const multi = bluebird.promisifyAll(cache.multi()) as Multi;
+  if (!uid) {
+    multi.del("profile-entities");
+    multi.del("profile-uid");
+    multi.del("profile");
+    multi.del("wxuser");
+    multi.del("openid_ticket");
+  }
+  const result = await db.query("SELECT id, openid, name, gender, identity_no, phone, nickname, portrait, pnrid, ticket, created_at, updated_at, tender_opened FROM users" + (uid ? " WHERE id = $1" : ""), uid ? [uid] : []);
+  const users = [];
+  for (const row of result.rows) {
+    users.push(row2user(row));
+  }
+  for (const user of users) {
+    const pkt = await msgpack_encode(user);
+    multi.hset("profile-entities", user["id"], pkt);
+    multi.hset("pnrid-uid", user["pnrid"], user["id"]);
+    multi.hset("wxuser", user["id"], user["openid"]);
+    multi.hset("wxuser", user["openid"], user["id"]);
+  }
+  return multi.execAsync();
+}
+
+processor.call("refresh", (ctx: ProcessorContext, cbflag: string, uid?: string) => {
+  log.info(`refresh cbflag: ${cbflag}${uid ? ", uid: " + uid : "" }`);
   const db: PGClient = ctx.db;
   const cache: RedisClient = ctx.cache;
   const done = ctx.done;
   (async () => {
     try {
-      const result = await db.query("SELECT id, openid, name, gender, identity_no, phone, nickname, portrait, pnrid, ticket, created_at, updated_at FROM users");
-      let users = [];
-      for (let row of result.rows) {
-        users.push(row2user(row));
-      }
-      let multi = bluebird.promisifyAll(cache.multi()) as Multi;
-      for (let user of users) {
-        let pkt = await msgpack_encode(user);
-        multi.hset("profile-entities", user["id"], pkt);
-        multi.hset("pnrid-uid", user["pnrid"], user["id"]);
-        multi.lpush("profile", user["id"]);
-        multi.hset("wxuser", user["id"], user["openid"]);
-        multi.hset("wxuser", user["openid"], user["id"]);
-        let ticket_entities = {
-          openid: user["openid"],
-          ticket: user["ticket"],
-          CreateTime: user["updated_at"]
-        };
-        let pkt2 = await msgpack_encode(ticket_entities);
-        multi.hset("openid_ticket", user["openid"], pkt2);
-      }
-      await multi.execAsync();
-      await set_for_response(cache, callback, { code: 200, data: "success" });
-      done()
+      await sync_users(db, cache, uid);
+      await set_for_response(cache, cbflag, { code: 200, data: "success" });
+      done();
     } catch (e) {
       log.error(e);
-      set_for_response(cache, callback, { code: 500, msg: e.message }).then(_ => {
-        done();
-      }).catch(e => {
-        log.error(e);
-        done();
-      });
+      done();
+      set_for_response(cache, cbflag, { code: 500, msg: e.message });
     }
   })();
 });
@@ -85,5 +84,6 @@ function row2user(row) {
     ticket: row.ticket ? row.ticket.trim() : "",
     created_at: row.created_at,
     updated_at: row.updated_at,
+    tender_opened: row.tender_opened
   };
 }
