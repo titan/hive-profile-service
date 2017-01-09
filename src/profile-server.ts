@@ -42,6 +42,26 @@ const tickets = [
   "gQFw7zoAAAAAAAAAASxodHRwOi8vd2VpeGluLnFxLmNvbS9xL0pqbFZKZ1BtUzdFeVUwaXJiUldyAAIELnEdWAMEAAAAAA==",
   "gQE78DoAAAAAAAAAASxodHRwOi8vd2VpeGluLnFxLmNvbS9xL1BUbGtSc1RtUkxFOTcxUDFYQldyAAIEMFEQWAMEAAAAAA==",
   "gQFA8DoAAAAAAAAAASxodHRwOi8vd2VpeGluLnFxLmNvbS9xL1l6a0RDb1htRHJGM3ZBMlVPeFdyAAIEJ9z9VwMEAAAAAA==",
+  "gQFd8DwAAAAAAAAAAS5odHRwOi8vd2VpeGluLnFxLmNvbS9xLzAyeHpoQTVxTGpjUzIxMDAwMHcwM1gAAgTpI2ZYAwQAAAAA",
+  "gQEK8TwAAAAAAAAAAS5odHRwOi8vd2VpeGluLnFxLmNvbS9xLzAyVzlZODV0TGpjUzIxMDAwMHcwM00AAgTDHWdYAwQAAAAA",
+  "gQHe8DwAAAAAAAAAAS5odHRwOi8vd2VpeGluLnFxLmNvbS9xLzAyRE5zaDRFTGpjUzIxMDAwME0wM0IAAgQHHmdYAwQAAAAA",
+  "gQG98DwAAAAAAAAAAS5odHRwOi8vd2VpeGluLnFxLmNvbS9xLzAyaDdOcDRPTGpjUzIxMDAwME0wMzkAAgQ3HmdYAwQAAAAA",
+  "gQHs8DwAAAAAAAAAAS5odHRwOi8vd2VpeGluLnFxLmNvbS9xLzAyRjE5UDRPTGpjUzIxMDAwME0wM0EAAgRdHmdYAwQAAAAA",
+  "gQEw8TwAAAAAAAAAAS5odHRwOi8vd2VpeGluLnFxLmNvbS9xLzAyVkJuYjVvTGpjUzIxMDAwMGcwMzQAAgSDHmdYAwQAAAAA",
+  "gQHl8DwAAAAAAAAAAS5odHRwOi8vd2VpeGluLnFxLmNvbS9xLzAyanJkUzVMTGpjUzIxMDAwMGcwM1cAAgSjHmdYAwQAAAAA",
+  "gQE88TwAAAAAAAAAAS5odHRwOi8vd2VpeGluLnFxLmNvbS9xLzAyR0MzRTVRTGpjUzIxMDAwMGcwM1kAAgTWHmdYAwQAAAAA",
+  "gQFU8DwAAAAAAAAAAS5odHRwOi8vd2VpeGluLnFxLmNvbS9xLzAyQm11UTVmTGpjUzIxMDAwMGcwM3cAAgQXH2dYAwQAAAAA",
+  "gQGr8DwAAAAAAAAAAS5odHRwOi8vd2VpeGluLnFxLmNvbS9xLzAyeFBjODRGTGpjUzIxMDAwMDAwM2UAAgQ8H2dYAwQAAAAA",
+  "gQFb8TwAAAAAAAAAAS5odHRwOi8vd2VpeGluLnFxLmNvbS9xLzAyS2hYYTVtTGpjUzIxMDAwMDAwMy0AAgSTH2dYAwQAAAAA",
+  "gQHz8DwAAAAAAAAAAS5odHRwOi8vd2VpeGluLnFxLmNvbS9xLzAyUUFTWDVkTGpjUzIxMDAwMHcwM18AAgS6H2dYAwQAAAAA",
+  "gQGN8DwAAAAAAAAAAS5odHRwOi8vd2VpeGluLnFxLmNvbS9xLzAydGRXcDRqTGpjUzIxMDAwMGcwM0MAAgTlH2dYAwQAAAAA",
+  "gQHC8DwAAAAAAAAAAS5odHRwOi8vd2VpeGluLnFxLmNvbS9xLzAyX0ZNMDV2TGpjUzIxMDAwMHcwM0oAAgQIIGdYAwQAAAAA",
+  "gQFG8DwAAAAAAAAAAS5odHRwOi8vd2VpeGluLnFxLmNvbS9xLzAyc25zNjV4TGpjUzIxMDAwMGcwM0UAAgQvIGdYAwQAAAAA",
+  "gQF_8DwAAAAAAAAAAS5odHRwOi8vd2VpeGluLnFxLmNvbS9xLzAyWlFBNzRhTGpjUzIxMDAwMHcwM04AAgRdIGdYAwQAAAAA",
+  "gQE38TwAAAAAAAAAAS5odHRwOi8vd2VpeGluLnFxLmNvbS9xLzAyYUI3YjRXTGpjUzIxMDAwMGcwM2oAAgSJIGdYAwQAAAAA",
+  "gQEk8TwAAAAAAAAAAS5odHRwOi8vd2VpeGluLnFxLmNvbS9xLzAyamNhTDRjTGpjUzIxMDAwMDAwM0UAAgSuIGdYAwQAAAAA",
+  "gQH48DwAAAAAAAAAAS5odHRwOi8vd2VpeGluLnFxLmNvbS9xLzAyQ3hVMzRLTGpjUzIxMDAwMGcwM2UAAgTSIGdYAwQAAAAA",
+  "gQHp8DwAAAAAAAAAAS5odHRwOi8vd2VpeGluLnFxLmNvbS9xLzAybjdIRzVKTGpjUzIxMDAwMHcwM0wAAgT5IGdYAwQAAAAA",
   "1089"
 ];
 
@@ -96,6 +116,7 @@ server.call("getDiscountStatus", allowAll, "获得当前用户优惠情况", "�
                 return;
               }
             }
+            rep({ code: 200, data: false });
           } else {
             rep({ code: 200, data: false });
           }
@@ -151,7 +172,7 @@ server.call("getUserByUserId", allowAll, "根据userid获得某个用户信息",
   }
   ctx.cache.hget(entity_key, user_id, function (err, result) {
     if (err || !result) {
-      rep({ code: 500, msg: err.message });
+      rep({ code: 500, msg: err ? err.message : "not found user" });
     } else {
       (async () => {
         try {
