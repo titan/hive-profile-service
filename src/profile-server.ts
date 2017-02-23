@@ -1,6 +1,5 @@
-import { Server, ServerContext, ServerFunction, CmdPacket, Permission, wait_for_response, msgpack_decode, msgpack_encode, rpc } from "hive-service";
-import * as Redis from "redis";
-import { Client as PGClient } from "pg";
+import { Server, ServerContext, rpc, AsyncServerFunction, CmdPacket, Permission, waitingAsync, msgpack_decode, msgpack_encode } from "hive-service";
+import { RedisClient, Multi } from "redis";
 import * as bunyan from "bunyan";
 import { verify, uuidVerifier, stringVerifier, arrayVerifier, numberVerifier, booleanVerifier } from "hive-verify";
 import * as uuid from "node-uuid";
@@ -25,9 +24,7 @@ let log = bunyan.createLogger({
   ]
 });
 
-let list_key = "profile";
 let entity_key = "profile-entities";
-let wxuser_key = "wxuser";
 
 export const server = new Server();
 
@@ -76,250 +73,187 @@ const tickets = [
 ];
 
 
-server.call("getUser", allowAll, "获得当前用户信息", "获得当前用户信息", (ctx: ServerContext, rep: ((result: any) => void)) => {
-  log.info("getUser " + ctx.uid);
-  ctx.cache.hget(entity_key, ctx.uid, function (err, result) {
-    if (err) {
-      rep({ code: 500, msg: err.message });
-    } else if (result) {
-      (async () => {
-        try {
-          let user = await msgpack_decode(result);
-          rep({ code: 200, data: user });
-        } catch (e) {
-          log.error(e);
-          rep({ code: 500, msg: e.message });
-        }
-      })();
+server.callAsync("getUser", allowAll, "获得用户信息", "获得当前用户信息", async (ctx: ServerContext, uid?: string) => {
+  log.info(`getUser, uid: ${uid ? uid : ctx.uid}`);
+  try {
+    const prep = await ctx.cache.hgetAsync("profile-entities", uid ? uid : ctx.uid);
+    if (prep !== null && prep !== "") {
+      const profile_entities = msgpack_decode(prep);
+      return { code: 200, data: profile_entities };
     } else {
-      rep({ code: 404, msg: "not found user" });
+      return { code: 404, msg: "未找到对应用户信息" };
     }
-  });
-});
-
-server.call("getDiscountStatus", allowAll, "获得当前用户优惠情况", "获得当前用户优惠情况", (ctx: ServerContext, rep: ((result: any) => void), recommend: string) => {
-  log.info("getDiscountStatus " + ctx.uid);
-  ctx.cache.hget(entity_key, ctx.uid, function (err, result) {
-    if (err) {
-      rep({ code: 500, msg: err.message });
-    } else if (result) {
-      (async () => {
-        try {
-          const user = await msgpack_decode(result);
-          if (user["ticket"] && user["ticket"] !== "") {
-            for (let ticket of tickets) {
-              if (user["ticket"] === ticket) {
-                rep({ code: 200, data: true });
-                return;
-              } else if (recommend && recommend !== "") {
-                if (recommend === ticket) {
-                  rep({ code: 200, data: true });
-                  return;
-                }
-              }
-            }
-            rep({ code: 200, data: false });
-          } else if (recommend && recommend !== "") {
-            for (let ticket of tickets) {
-              if (recommend === ticket) {
-                rep({ code: 200, data: true });
-                return;
-              }
-            }
-            rep({ code: 200, data: false });
-          } else {
-            rep({ code: 200, data: false });
-          }
-        } catch (e) {
-          log.error(e);
-          rep({ code: 500, msg: e.message });
-        }
-      })();
-    } else {
-      rep({ code: 404, msg: "not found user" });
-    }
-  });
-});
-
-server.call("getUserForInvite", allowAll, "获取邀请好友信息", "获取邀请好友信息", (ctx: ServerContext, rep: ((result: any) => void), key: string) => {
-  log.info("getUserForInvite " + key);
-  ctx.cache.get("InviteKey:" + key, function (err, result) {
-    if (err) {
-      rep({ code: 500, msg: err.message });
-    } else if (result) {
-      ctx.cache.hget(entity_key, result, function (err2, result2) {
-        if (err2) {
-          rep({ code: 500, msg: err2.message });
-        } else if (result2) {
-          (async () => {
-            try {
-              let user = await msgpack_decode(result2);
-              rep({ code: 200, data: user });
-            } catch (e) {
-              log.error(e);
-              rep({ code: 500, msg: e.message });
-            }
-          })();
-        } else {
-          rep({ code: 404, msg: "not found user" });
-        }
-      });
-    } else {
-      rep({ code: 404, msg: "not found invitekey" });
-    }
-  });
-});
-
-server.call("getUserByUserId", allowAll, "根据userid获得某个用户信息", "根据userid获得某个用户信息", (ctx: ServerContext, rep: ((result: any) => void), user_id: string) => {
-  log.info("getUserByUserId " + ctx.uid);
-  if (!verify([uuidVerifier("user_id", user_id)], (errors: string[]) => {
-    rep({
-      code: 400,
-      msg: errors.join("\n")
-    });
-  })) {
-    return;
+  } catch (e) {
+    log.info(e);
+    throw { code: 500, msg: e.message };
   }
-  ctx.cache.hget(entity_key, user_id, function (err, result) {
-    if (err || !result) {
-      rep({ code: 500, msg: err ? err.message : "not found user" });
-    } else {
-      (async () => {
-        try {
-          let user = await msgpack_decode(result);
-          rep({ code: 200, data: user });
-        } catch (e) {
-          log.error(e);
-          rep({ code: 500, msg: e.message });
-        }
-      })();
-    }
-  });
 });
 
-server.call("refresh", adminOnly, "refresh", "refresh", (ctx: ServerContext, rep: ((result: any) => void), uid?: string) => {
+
+// server.call("getDiscountStatus", allowAll, "获得当前用户优惠情况", "获得当前用户优惠情况", (ctx: ServerContext, rep: ((result: any) => void), recommend: string) => {
+//   log.info("getDiscountStatus " + ctx.uid);
+//   ctx.cache.hget(entity_key, ctx.uid, function (err, result) {
+//     if (err) {
+//       rep({ code: 500, msg: err.message });
+//     } else if (result) {
+//       (async () => {
+//         try {
+//           const user = await msgpack_decode(result);
+//           if (user["ticket"] && user["ticket"] !== "") {
+//             for (let ticket of tickets) {
+//               if (user["ticket"] === ticket) {
+//                 rep({ code: 200, data: true });
+//                 return;
+//               } else if (recommend && recommend !== "") {
+//                 if (recommend === ticket) {
+//                   rep({ code: 200, data: true });
+//                   return;
+//                 }
+//               }
+//             }
+//             rep({ code: 200, data: false });
+//           } else if (recommend && recommend !== "") {
+//             for (let ticket of tickets) {
+//               if (recommend === ticket) {
+//                 rep({ code: 200, data: true });
+//                 return;
+//               }
+//             }
+//             rep({ code: 200, data: false });
+//           } else {
+//             rep({ code: 200, data: false });
+//           }
+//         } catch (e) {
+//           log.error(e);
+//           rep({ code: 500, msg: e.message });
+//         }
+//       })();
+//     } else {
+//       rep({ code: 404, msg: "not found user" });
+//     }
+//   });
+// });
+
+server.callAsync("getInviter", allowAll, "获取邀请好友信息", "发送互助组邀请时使用", async (ctx: ServerContext, key: string) => {
+  log.info(`getInviter, token: ${key}`);
+  try {
+    verify([stringVerifier("token", key)]);
+  } catch (e) {
+    log.info(e);
+    return { code: 400, msg: e.message };
+  }
+  try {
+    const uid = await ctx.cache.getAsync("InviteKey:" + key);
+    if (uid !== null && uid !== "") {
+      const prep = await ctx.cache.hgetAsync("profile-entities", String(uid));
+      if (prep !== null && prep !== "") {
+        const profile_entities = await msgpack_decode(prep);
+        return { code: 200, data: profile_entities };
+      } else {
+        return { code: 404, msg: "未找到对应用户信息" };
+      }
+    } else {
+      return { code: 404, msg: "未找到对应用户信息" };
+    }
+  } catch (e) {
+    log.info(e);
+    throw { code: 500, msg: e.message };
+  }
+});
+
+
+server.callAsync("getUserByUserIds", allowAll, "获取的用户信息", "获取一组用户信息", async (ctx: ServerContext, uids) => {
+  log.info(`getUserByUserIds, uids: ${uids}`);
+  try {
+    verify([arrayVerifier("uids", uids)]);
+  } catch (e) {
+    log.info(e);
+    return { code: 400, msg: e.message };
+  }
+  try {
+    const len = uids.length;
+    if (len === 0) {
+      return { code: 404, msg: "请选择需要查看的用户信息" };
+    } else {
+      const users = [];
+      for (const uid of uids) {
+        const prep = await ctx.cache.hgetAsync("profile-entities", uid);
+        if (prep !== null && prep !== "") {
+          const user = await msgpack_decode(prep);
+          users.push(user);
+        }
+      }
+      if (users.length === 0) {
+        return { code: 404, msg: "未找到对应用户信息" };
+      } else {
+        const result = {};
+        for (let user of users) {
+          result[user.id] = user;
+        }
+        return { code: 200, data: result };
+      }
+    }
+  } catch (e) {
+    log.info(e);
+    throw { code: 500, msg: e.message };
+  }
+});
+
+
+server.callAsync("setInsured", allowAll, "获取投保人信息", "获取投保人信息", async (ctx: ServerContext, insured: string) => {
+  try {
+    verify([uuidVerifier("insured", insured)]);
+  } catch (e) {
+    log.info(e);
+    return { code: 400, msg: e.message };
+  }
+  const args = [ctx.uid, insured];
+  const pkt: CmdPacket = { cmd: "setInsured", args: args };
+  ctx.publish(pkt);
+  waitingAsync(ctx);
+});
+
+
+server.callAsync("refresh", adminOnly, "refresh", "refresh", async (ctx: ServerContext, uid?: string) => {
   if (uid) {
     log.info(`refresh ${uid}`);
-    if (!verify([uuidVerifier("uid", uid)], (errors: string[]) => {
-      rep({
-        code: 400,
-        msg: errors.join("\n")
-      });
-    })) {
-      return;
+    try {
+      verify([uuidVerifier("uid", uid)]);
+    } catch (e) {
+      log.info(e);
+      return { code: 400, msg: e.message };
     }
   } else {
     log.info(`refresh`);
   }
-  const cbflag = uuid.v1();
-  const pkt: CmdPacket = { cmd: "refresh", args: uid ? [cbflag, uid] : [cbflag] };
+  const args = uid ? [uid] : [];
+  const pkt: CmdPacket = { cmd: "refresh", args: args };
   ctx.publish(pkt);
-  wait_for_response(ctx.cache, cbflag, rep);
+  waitingAsync(ctx);
 });
 
-server.call("getAllUsers", allowAll, "获取所有用户信息", "获取所有用户信息", (ctx: ServerContext, rep: ((result: any) => void), start: number, limit: number) => {
-  log.info("getAllUsers" + "uid is " + ctx.uid);
-  if (!verify([numberVerifier("start", start), numberVerifier("limit", limit)], (errors: string[]) => {
-    rep({
-      code: 400,
-      msg: errors.join("\n")
-    });
-  })) {
-    return;
-  }
-  ctx.cache.lrange(list_key, start, limit, function (err, result) {
-    if (err) {
-      rep({ code: 500, msg: err.message });
-    } else {
-      let multi = ctx.cache.multi();
-      for (let id of result) {
-        multi.hget(entity_key, id);
-      }
-      multi.exec(function (err, replies) {
-        if (err) {
-          log.info("multi err: " + err);
-          rep({ code: 500, msg: err.message });
-        } else {
-          (async () => {
-            try {
-              let users = [];
-              for (let reply of replies) {
-                let user = await msgpack_decode(reply);
-                users.push(user);
-              }
-              rep({ code: 200, data: users });
-            } catch (e) {
-              log.error(e);
-              rep({ code: 500, msg: e.message });
-            }
-          })();
-          rep({ code: 200, data: replies });
-        }
-      });
-    }
-  });
-});
 
-server.call("getUserByUserIds", allowAll, "根据userid数组获得一些用户信息", "根据userid数组获得一些用户信息", (ctx: ServerContext, rep: ((result: any) => void), user_ids) => {
-  log.info("getUserByUserIds " + ctx.uid);
-  let multi = ctx.cache.multi();
-  for (let user_id of user_ids) {
-    multi.hget(entity_key, user_id);
-  }
-  multi.exec((err, result) => {
-    if (err) {
-      log.info(err);
-      rep({ code: 500, msg: err.message });
-    } else if (result) {
-      let users = [];
-      (async () => {
-        try {
-          let users = [];
-          for (let u of result) {
-            let user = await msgpack_decode(u);
-            users.push(user);
-          }
-        } catch (e) {
-          log.error(e);
-          rep({ code: 500, msg: e.message });
-        }
-      })();
-      let replies = {};
-      for (let user of users) {
-        replies[user.id] = user;
-      }
-      rep({ code: 200, data: replies });
-    } else {
-      log.info("not found users");
-      rep({ code: 404, msg: "not found users" });
-    }
-  });
-});
-
-server.call("setTenderOpened", allowAll, "设置开通自动投标标志", "设置开通自动投标标志", (ctx: ServerContext, rep: ((result: any) => void), flag: boolean, uid?: string) => {
+server.callAsync("setTenderOpened", adminOnly, "设置开通自动投标标志", "设置开通自动投标标志", async (ctx: ServerContext, flag: boolean, uid?: string) => {
   if (uid) {
     log.info(`setTenderOpened, flag: ${flag}, uid: ${uid}`);
-    if (!verify([booleanVerifier("flag", flag), uuidVerifier("uid", uid)], (errors: string[]) => {
-      rep({
-        code: 400,
-        msg: errors.join("\n")
-      });
-    })) {
-      return;
+    try {
+      verify([uuidVerifier("uid", uid), booleanVerifier("flag", flag)]);
+    } catch (e) {
+      log.info(e);
+      return { code: 400, msg: e.message };
     }
   } else {
     log.info(`setTenderOpened, flag: ${flag}`);
-    if (!verify([booleanVerifier("flag", flag), uuidVerifier("uid", ctx.uid)], (errors: string[]) => {
-      rep({
-        code: 400,
-        msg: errors.join("\n")
-      });
-    })) {
-      return;
+    try {
+      verify([booleanVerifier("flag", flag)]);
+    } catch (e) {
+      log.info(e);
+      return { code: 400, msg: e.message };
     }
   }
-  const cbflag = uuid.v1();
-  const pkt: CmdPacket = { cmd: "setTenderOpened", args: uid ? [flag, cbflag, uid] : [flag, cbflag, ctx.uid] };
+  const args = uid ? [flag, uid] : [flag];
+  const pkt: CmdPacket = { cmd: "setTenderOpened", args: args };
   ctx.publish(pkt);
-  wait_for_response(ctx.cache, cbflag, rep);
+  waitingAsync(ctx);
 });
+

@@ -1,4 +1,4 @@
-import { Processor, ProcessorFunction, ProcessorContext, rpc, set_for_response, msgpack_decode, msgpack_encode } from "hive-service";
+import { Processor, ProcessorContext, rpc, ProcessorFunction, AsyncServerFunction, CmdPacket, Permission, set_for_response, waiting, msgpack_decode, msgpack_encode } from "hive-service";
 import { Client as PGClient, QueryResult } from "pg";
 import { RedisClient, Multi } from "redis";
 import * as bunyan from "bunyan";
@@ -36,7 +36,7 @@ async function sync_users(db: PGClient, cache: RedisClient, uid?: string): Promi
     multi.del("wxuser");
     multi.del("openid_ticket");
   }
-  const result = await db.query("SELECT id, openid, name, gender, identity_no, phone, nickname, portrait, pnrid, ticket, created_at, updated_at, tender_opened FROM users" + (uid ? " WHERE id = $1" : ""), uid ? [uid] : []);
+  const result = await db.query("SELECT id, openid, name, gender, identity_no, phone, nickname, portrait, pnrid, ticket, created_at, updated_at, tender_opened, insured FROM users" + (uid ? " WHERE id = $1" : ""), uid ? [uid] : []);
   const users = [];
   for (const row of result.rows) {
     users.push(row2user(row));
@@ -51,47 +51,51 @@ async function sync_users(db: PGClient, cache: RedisClient, uid?: string): Promi
   return multi.execAsync();
 }
 
-processor.call("refresh", (ctx: ProcessorContext, cbflag: string, uid?: string) => {
-  log.info(`refresh cbflag: ${cbflag}${uid ? ", uid: " + uid : "" }`);
+processor.callAsync("refresh", async (ctx: ProcessorContext, uid?: string) => {
+  log.info(`refresh${uid ? ", uid: " + uid : ""}`);
   const db: PGClient = ctx.db;
   const cache: RedisClient = ctx.cache;
-  const done = ctx.done;
-  (async () => {
-    try {
-      await sync_users(db, cache, uid);
-      await set_for_response(cache, cbflag, { code: 200, data: "success" });
-      done();
-    } catch (e) {
-      log.error(e);
-      done();
-      set_for_response(cache, cbflag, { code: 500, msg: e.message });
-    }
-  })();
+  try {
+    await sync_users(db, cache, uid);
+    return { code: 200, data: "success" };
+  } catch (e) {
+    log.error(e);
+    throw { code: 500, msg: e.message };
+  }
 });
 
-processor.call("setTenderOpened", (ctx: ProcessorContext, flag: boolean, cbflag: string, uid: string) => {
-  log.info(`setTenderOpened flag: ${flag}, cbflag: ${cbflag}, uid: ${uid}`);
+processor.callAsync("setInsured", async (ctx: ProcessorContext, uid: string, insured: string) => {
+  log.info(`setInsured,uid: ${uid}, insured: ${insured}`);
+  try {
+    const db: PGClient = ctx.db;
+    const cache: RedisClient = ctx.cache;
+    await db.query("UPDATE SET insured = $1 WHERE id = $2", [insured, uid]);
+    await sync_users(db, cache, uid);
+    return { code: 200, data: "success" };
+  } catch (e) {
+    log.info(e);
+    return { code: 500, msg: e.message };
+  }
+});
+
+processor.callAsync("setTenderOpened", async (ctx: ProcessorContext, flag: boolean, uid: string) => {
+  log.info(`setTenderOpened flag: ${flag}, uid: ${uid}`);
   const db: PGClient = ctx.db;
   const cache: RedisClient = ctx.cache;
-  const done = ctx.done;
-  (async () => {
-    try {
-      const result = await db.query("SELECT count(1) FROM users WHERE id = $1", [uid]);
-      if (result.rows[0].count == 0) {
-        await set_for_response(cache, cbflag, { code: 404, msg: "User not found" });
-        done();
-        return;
-      }
+  try {
+    const result = await db.query("SELECT count(1) FROM users WHERE id = $1", [uid]);
+    if (result.rows[0].count === 0) {
+      return { code: 404, msg: "未找到对应用户" };
+    } else {
       await db.query("UPDATE users SET tender_opened = $1 WHERE id = $2", [flag, uid]);
       await sync_users(db, cache, uid);
-      await set_for_response(cache, cbflag, { code: 200, data: "success" });
-      done();
-    } catch (e) {
-      log.error(e);
-      done();
-      set_for_response(cache, cbflag, { code: 500, msg: e.message });
+      return { code: 200, data: "success" };
     }
-  })();
+  } catch (e) {
+    log.error(e);
+    throw { code: 500, msg: e.message };
+
+  }
 });
 
 function row2user(row) {
@@ -108,6 +112,7 @@ function row2user(row) {
     ticket: row.ticket ? row.ticket.trim() : "",
     created_at: row.created_at,
     updated_at: row.updated_at,
-    tender_opened: row.tender_opened
+    tender_opened: row.tender_opened,
+    insured: row.insured
   };
 }
