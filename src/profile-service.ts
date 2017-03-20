@@ -3,9 +3,6 @@ import { server } from "./profile-server";
 import { processor } from "./profile-processor";
 import * as bunyan from "bunyan";
 
-const loginfo = (...x) => log.info(...x);
-const logerror = (...x) => log.error(...x);
-
 const log = bunyan.createLogger({
   name: "profile-service",
   streams: [
@@ -26,6 +23,8 @@ const log = bunyan.createLogger({
   ]
 });
 
+const loginfo = (...x) => log.info(x);
+const logerror = (...x) => log.error(x);
 
 const config: Config = {
   modname: "PROFILE",
