@@ -1,4 +1,4 @@
-import { Server, ServerContext, rpc, AsyncServerFunction, CmdPacket, Permission, waitingAsync, msgpack_decode, msgpack_encode } from "hive-service";
+import { Server, ServerContext, rpcAsync, AsyncServerFunction, CmdPacket, Permission, waitingAsync, msgpack_decode_async as msgpack_decode, msgpack_encode_async as msgpack_encode } from "hive-service";
 import { RedisClient, Multi } from "redis";
 import * as bunyan from "bunyan";
 import { verify, uuidVerifier, stringVerifier, arrayVerifier, numberVerifier, booleanVerifier } from "hive-verify";
@@ -32,45 +32,6 @@ const allowAll: Permission[] = [["mobile", true], ["admin", true]];
 const mobileOnly: Permission[] = [["mobile", true], ["admin", false]];
 const adminOnly: Permission[] = [["mobile", false], ["admin", true]];
 
-const tickets = [
-  "gQH57zoAAAAAAAAAASxodHRwOi8vd2VpeGluLnFxLmNvbS9xL1REbklHUDdtOGJHSV9pS3k4QldyAAIEMGApWAMEAAAAAA==",
-  "gQHa8DoAAAAAAAAAASxodHRwOi8vd2VpeGluLnFxLmNvbS9xLzN6bDFNQ1BtVExFMW5MR2FUUldyAAIE1ugfWAMEAAAAAA==",
-  "gQFw7zoAAAAAAAAAASxodHRwOi8vd2VpeGluLnFxLmNvbS9xL0pqbFZKZ1BtUzdFeVUwaXJiUldyAAIELnEdWAMEAAAAAA==",
-  "gQFw7zoAAAAAAAAAASxodHRwOi8vd2VpeGluLnFxLmNvbS9xL0pqbFZKZ1BtUzdFeVUwaXJiUldyAAIELnEdWAMEAAAAAA==",
-  "gQE78DoAAAAAAAAAASxodHRwOi8vd2VpeGluLnFxLmNvbS9xL1BUbGtSc1RtUkxFOTcxUDFYQldyAAIEMFEQWAMEAAAAAA==",
-  "gQFA8DoAAAAAAAAAASxodHRwOi8vd2VpeGluLnFxLmNvbS9xL1l6a0RDb1htRHJGM3ZBMlVPeFdyAAIEJ9z9VwMEAAAAAA==",
-  "gQFd8DwAAAAAAAAAAS5odHRwOi8vd2VpeGluLnFxLmNvbS9xLzAyeHpoQTVxTGpjUzIxMDAwMHcwM1gAAgTpI2ZYAwQAAAAA",
-  "gQEK8TwAAAAAAAAAAS5odHRwOi8vd2VpeGluLnFxLmNvbS9xLzAyVzlZODV0TGpjUzIxMDAwMHcwM00AAgTDHWdYAwQAAAAA",
-  "gQHe8DwAAAAAAAAAAS5odHRwOi8vd2VpeGluLnFxLmNvbS9xLzAyRE5zaDRFTGpjUzIxMDAwME0wM0IAAgQHHmdYAwQAAAAA",
-  "gQG98DwAAAAAAAAAAS5odHRwOi8vd2VpeGluLnFxLmNvbS9xLzAyaDdOcDRPTGpjUzIxMDAwME0wMzkAAgQ3HmdYAwQAAAAA",
-  "gQHs8DwAAAAAAAAAAS5odHRwOi8vd2VpeGluLnFxLmNvbS9xLzAyRjE5UDRPTGpjUzIxMDAwME0wM0EAAgRdHmdYAwQAAAAA",
-  "gQEw8TwAAAAAAAAAAS5odHRwOi8vd2VpeGluLnFxLmNvbS9xLzAyVkJuYjVvTGpjUzIxMDAwMGcwMzQAAgSDHmdYAwQAAAAA",
-  "gQHl8DwAAAAAAAAAAS5odHRwOi8vd2VpeGluLnFxLmNvbS9xLzAyanJkUzVMTGpjUzIxMDAwMGcwM1cAAgSjHmdYAwQAAAAA",
-  "gQE88TwAAAAAAAAAAS5odHRwOi8vd2VpeGluLnFxLmNvbS9xLzAyR0MzRTVRTGpjUzIxMDAwMGcwM1kAAgTWHmdYAwQAAAAA",
-  "gQFU8DwAAAAAAAAAAS5odHRwOi8vd2VpeGluLnFxLmNvbS9xLzAyQm11UTVmTGpjUzIxMDAwMGcwM3cAAgQXH2dYAwQAAAAA",
-  "gQGr8DwAAAAAAAAAAS5odHRwOi8vd2VpeGluLnFxLmNvbS9xLzAyeFBjODRGTGpjUzIxMDAwMDAwM2UAAgQ8H2dYAwQAAAAA",
-  "gQFb8TwAAAAAAAAAAS5odHRwOi8vd2VpeGluLnFxLmNvbS9xLzAyS2hYYTVtTGpjUzIxMDAwMDAwMy0AAgSTH2dYAwQAAAAA",
-  "gQHz8DwAAAAAAAAAAS5odHRwOi8vd2VpeGluLnFxLmNvbS9xLzAyUUFTWDVkTGpjUzIxMDAwMHcwM18AAgS6H2dYAwQAAAAA",
-  "gQGN8DwAAAAAAAAAAS5odHRwOi8vd2VpeGluLnFxLmNvbS9xLzAydGRXcDRqTGpjUzIxMDAwMGcwM0MAAgTlH2dYAwQAAAAA",
-  "gQHC8DwAAAAAAAAAAS5odHRwOi8vd2VpeGluLnFxLmNvbS9xLzAyX0ZNMDV2TGpjUzIxMDAwMHcwM0oAAgQIIGdYAwQAAAAA",
-  "gQFG8DwAAAAAAAAAAS5odHRwOi8vd2VpeGluLnFxLmNvbS9xLzAyc25zNjV4TGpjUzIxMDAwMGcwM0UAAgQvIGdYAwQAAAAA",
-  "gQF_8DwAAAAAAAAAAS5odHRwOi8vd2VpeGluLnFxLmNvbS9xLzAyWlFBNzRhTGpjUzIxMDAwMHcwM04AAgRdIGdYAwQAAAAA",
-  "gQE38TwAAAAAAAAAAS5odHRwOi8vd2VpeGluLnFxLmNvbS9xLzAyYUI3YjRXTGpjUzIxMDAwMGcwM2oAAgSJIGdYAwQAAAAA",
-  "gQEk8TwAAAAAAAAAAS5odHRwOi8vd2VpeGluLnFxLmNvbS9xLzAyamNhTDRjTGpjUzIxMDAwMDAwM0UAAgSuIGdYAwQAAAAA",
-  "gQH48DwAAAAAAAAAAS5odHRwOi8vd2VpeGluLnFxLmNvbS9xLzAyQ3hVMzRLTGpjUzIxMDAwMGcwM2UAAgTSIGdYAwQAAAAA",
-  "gQHp8DwAAAAAAAAAAS5odHRwOi8vd2VpeGluLnFxLmNvbS9xLzAybjdIRzVKTGpjUzIxMDAwMHcwM0wAAgT5IGdYAwQAAAAA",
-  "gQHw7zwAAAAAAAAAAS5odHRwOi8vd2VpeGluLnFxLmNvbS9xLzAyUzN4TzVfTGpjUzIxMDAwMGcwM2kAAgRWcHhYAwQAAAAA",
-  "1089",
-  "申健",
-  "曲淼",
-  "满强",
-  "赵洋",
-  "靳建行",
-  "祁畅",
-  "董盛瑞",
-  "叶昌晶",
-  "秦佳华"
-];
 
 
 server.callAsync("getUser", allowAll, "获得用户信息", "获得当前用户信息", async (ctx: ServerContext, uid?: string) => {
@@ -78,7 +39,7 @@ server.callAsync("getUser", allowAll, "获得用户信息", "获得当前用户�
   try {
     const prep = await ctx.cache.hgetAsync("profile-entities", uid ? uid : ctx.uid);
     if (prep !== null && prep !== "") {
-      const profile_entities = msgpack_decode(prep);
+      const profile_entities = await msgpack_decode(prep);
       return { code: 200, data: profile_entities };
     } else {
       return { code: 404, msg: "未找到对应用户信息" };
@@ -90,54 +51,11 @@ server.callAsync("getUser", allowAll, "获得用户信息", "获得当前用户�
 });
 
 
-// server.call("getDiscountStatus", allowAll, "获得当前用户优惠情况", "获得当前用户优惠情况", (ctx: ServerContext, rep: ((result: any) => void), recommend: string) => {
-//   log.info("getDiscountStatus " + ctx.uid);
-//   ctx.cache.hget(entity_key, ctx.uid, function (err, result) {
-//     if (err) {
-//       rep({ code: 500, msg: err.message });
-//     } else if (result) {
-//       (async () => {
-//         try {
-//           const user = await msgpack_decode(result);
-//           if (user["ticket"] && user["ticket"] !== "") {
-//             for (let ticket of tickets) {
-//               if (user["ticket"] === ticket) {
-//                 rep({ code: 200, data: true });
-//                 return;
-//               } else if (recommend && recommend !== "") {
-//                 if (recommend === ticket) {
-//                   rep({ code: 200, data: true });
-//                   return;
-//                 }
-//               }
-//             }
-//             rep({ code: 200, data: false });
-//           } else if (recommend && recommend !== "") {
-//             for (let ticket of tickets) {
-//               if (recommend === ticket) {
-//                 rep({ code: 200, data: true });
-//                 return;
-//               }
-//             }
-//             rep({ code: 200, data: false });
-//           } else {
-//             rep({ code: 200, data: false });
-//           }
-//         } catch (e) {
-//           log.error(e);
-//           rep({ code: 500, msg: e.message });
-//         }
-//       })();
-//     } else {
-//       rep({ code: 404, msg: "not found user" });
-//     }
-//   });
-// });
 
 server.callAsync("getInviter", allowAll, "获取邀请好友信息", "发送互助组邀请时使用", async (ctx: ServerContext, key: string) => {
   log.info(`getInviter, token: ${key}`);
   try {
-    verify([stringVerifier("token", key)]);
+    await verify([stringVerifier("token", key)]);
   } catch (e) {
     log.info(e);
     return { code: 400, msg: e.message };
@@ -165,7 +83,7 @@ server.callAsync("getInviter", allowAll, "获取邀请好友信息", "发送互�
 server.callAsync("getUserByUserIds", allowAll, "获取的用户信息", "获取一组用户信息", async (ctx: ServerContext, uids) => {
   log.info(`getUserByUserIds, uids: ${uids}`);
   try {
-    verify([arrayVerifier("uids", uids)]);
+    await verify([arrayVerifier("uids", uids)]);
   } catch (e) {
     log.info(e);
     return { code: 400, msg: e.message };
@@ -200,17 +118,71 @@ server.callAsync("getUserByUserIds", allowAll, "获取的用户信息", "获取�
 });
 
 
-server.callAsync("setInsured", allowAll, "获取投保人信息", "获取投保人信息", async (ctx: ServerContext, insured: string) => {
+server.callAsync("getInsured", allowAll, "获取投保人信息", "获取投保人信息", async (ctx: ServerContext) => {
+  log.info(`getInsured,uid:${ctx.uid}`);
   try {
-    verify([uuidVerifier("insured", insured)]);
+    const urep = await ctx.cache.hgetAsync("profile-entities", ctx.uid);
+    if (urep !== null && urep !== "") {
+      const user = await msgpack_decode(urep);
+      const insured = user["insured"];
+      if (insured) {
+        const prep = await rpcAsync("mobile", process.env["PERSON"], ctx.uid, "getPerson", insured);
+        if (prep["code"] === 200) {
+          return { code: 200, data: prep["data"] };
+        } else {
+          return { code: 404, msg: prep["msg"] };
+        }
+      } else {
+        return { code: 404, msg: "未找到对应投保人" };
+      }
+    } else {
+      return { code: 404, msg: "未找到对应用户信息" };
+    }
+  } catch (e) {
+    log.info(e);
+    return { code: 500, msg: e.message }
+  }
+});
+
+server.callAsync("setInsured", allowAll, "设置投保人信息", "设置投保人信息", async (ctx: ServerContext, insured: string) => {
+  try {
+    await verify([uuidVerifier("insured", insured)]);
   } catch (e) {
     log.info(e);
     return { code: 400, msg: e.message };
   }
-  const args = [ctx.uid, insured];
-  const pkt: CmdPacket = { cmd: "setInsured", args: args };
-  ctx.publish(pkt);
-  waitingAsync(ctx);
+  const urep = await ctx.cache.hgetAsync("profile-entities", ctx.uid);
+  if (urep !== null && urep !== "") {
+    const user = await msgpack_decode(urep);
+    const uid = user["id"];
+    if (uid === ctx.uid) {
+      const old_insured = user["insured"];
+      if (old_insured !== null && old_insured !== undefined && old_insured !== "") {
+        const prep = await rpcAsync("mobile", process.env["PERSON"], ctx.uid, "getPerson", old_insured);
+        if (prep["code"] === 200) {
+          if (prep["data"]["verified"] === true) {
+            return { code: 200, data: old_insured };
+          } else {
+            const args = [uid, insured];
+            const pkt: CmdPacket = { cmd: "setInsured", args: args };
+            ctx.publish(pkt);
+            return await waitingAsync(ctx);
+          }
+        } else {
+          return { code: prep["code"], msg: prep["msg"] };
+        }
+      } else {
+        const args = [uid, insured];
+        const pkt: CmdPacket = { cmd: "setInsured", args: args };
+        ctx.publish(pkt);
+        return await waitingAsync(ctx);
+      }
+    } else {
+      return { code: 501, msg: "暂不支持为其他用户设置投保人" };
+    }
+  } else {
+    return { code: 404, msg: "未找到当前用户信息" };
+  }
 });
 
 
@@ -218,7 +190,7 @@ server.callAsync("refresh", adminOnly, "refresh", "refresh", async (ctx: ServerC
   if (uid) {
     log.info(`refresh ${uid}`);
     try {
-      verify([uuidVerifier("uid", uid)]);
+      await verify([uuidVerifier("uid", uid)]);
     } catch (e) {
       log.info(e);
       return { code: 400, msg: e.message };
@@ -229,31 +201,38 @@ server.callAsync("refresh", adminOnly, "refresh", "refresh", async (ctx: ServerC
   const args = uid ? [uid] : [];
   const pkt: CmdPacket = { cmd: "refresh", args: args };
   ctx.publish(pkt);
-  waitingAsync(ctx);
+  return await waitingAsync(ctx);
 });
 
 
-server.callAsync("setTenderOpened", adminOnly, "设置开通自动投标标志", "设置开通自动投标标志", async (ctx: ServerContext, flag: boolean, uid?: string) => {
+server.callAsync("setTenderOpened", allowAll, "设置开通自动投标标志", "设置开通自动投标标志", async (ctx: ServerContext, flag: boolean, uid: string) => {
+  log.info(`setTenderOpened, flag: ${flag}, uid: ${uid ? uid : ctx.uid}`);
   if (uid) {
-    log.info(`setTenderOpened, flag: ${flag}, uid: ${uid}`);
-    try {
-      verify([uuidVerifier("uid", uid), booleanVerifier("flag", flag)]);
-    } catch (e) {
-      log.info(e);
-      return { code: 400, msg: e.message };
+    if (ctx.domain === "admin") {
+      try {
+        await verify([uuidVerifier("uid", uid), booleanVerifier("flag", flag)]);
+      } catch (e) {
+        log.info(e);
+        return { code: 400, msg: e.message };
+      }
+      const args = [flag, uid];
+      const pkt: CmdPacket = { cmd: "setTenderOpened", args: args };
+      ctx.publish(pkt);
+      return await waitingAsync(ctx);
+    } else {
+      return { code: 403, msg: "暂无权限设置除本人外用户" };
     }
   } else {
-    log.info(`setTenderOpened, flag: ${flag}`);
     try {
-      verify([booleanVerifier("flag", flag)]);
+      await verify([uuidVerifier("uid", ctx.uid), booleanVerifier("flag", flag)]);
     } catch (e) {
       log.info(e);
       return { code: 400, msg: e.message };
     }
+    const args = [flag, ctx.uid];
+    const pkt: CmdPacket = { cmd: "setTenderOpened", args: args };
+    ctx.publish(pkt);
+    return await waitingAsync(ctx);
   }
-  const args = uid ? [flag, uid] : [flag];
-  const pkt: CmdPacket = { cmd: "setTenderOpened", args: args };
-  ctx.publish(pkt);
-  waitingAsync(ctx);
 });
 

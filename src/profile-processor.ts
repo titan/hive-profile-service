@@ -1,4 +1,4 @@
-import { Processor, ProcessorContext, rpc, ProcessorFunction, AsyncServerFunction, CmdPacket, Permission, set_for_response, waiting, msgpack_decode, msgpack_encode } from "hive-service";
+import { BusinessEventContext, Processor, ProcessorContext, BusinessEventHandlerFunction, BusinessEventListener, rpcAsync, ProcessorFunction, AsyncServerFunction, CmdPacket, Permission, waiting, msgpack_decode_async as msgpack_decode, msgpack_encode_async as msgpack_encode } from "hive-service";
 import { Client as PGClient, QueryResult } from "pg";
 import { RedisClient, Multi } from "redis";
 import * as bunyan from "bunyan";
@@ -69,9 +69,9 @@ processor.callAsync("setInsured", async (ctx: ProcessorContext, uid: string, ins
   try {
     const db: PGClient = ctx.db;
     const cache: RedisClient = ctx.cache;
-    await db.query("UPDATE SET insured = $1 WHERE id = $2", [insured, uid]);
+    await db.query("UPDATE users SET insured = $1 WHERE id = $2", [insured, uid]);
     await sync_users(db, cache, uid);
-    return { code: 200, data: "success" };
+    return { code: 200, data: insured };
   } catch (e) {
     log.info(e);
     return { code: 500, msg: e.message };
