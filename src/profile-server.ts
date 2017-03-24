@@ -2,7 +2,6 @@ import { Server, ServerContext, rpcAsync, AsyncServerFunction, CmdPacket, Permis
 import { RedisClient, Multi } from "redis";
 import * as bunyan from "bunyan";
 import { verify, uuidVerifier, stringVerifier, arrayVerifier, numberVerifier, booleanVerifier } from "hive-verify";
-import * as uuid from "node-uuid";
 
 let log = bunyan.createLogger({
   name: "profile-server",

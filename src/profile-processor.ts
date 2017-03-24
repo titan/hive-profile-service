@@ -42,11 +42,12 @@ async function sync_users(db: PGClient, cache: RedisClient, uid?: string): Promi
     users.push(row2user(row));
   }
   for (const user of users) {
-    const pkt = await msgpack_encode(user);
-    multi.hset("profile-entities", user["id"], pkt);
     multi.hset("pnrid-uid", user["pnrid"], user["id"]);
     multi.hset("wxuser", user["id"], user["openid"]);
     multi.hset("wxuser", user["openid"], user["id"]);
+    delete user["openid"];
+    const pkt = await msgpack_encode(user);
+    multi.hset("profile-entities", user["id"], pkt);
   }
   return multi.execAsync();
 }
@@ -101,8 +102,8 @@ processor.callAsync("setTenderOpened", async (ctx: ProcessorContext, flag: boole
 function row2user(row) {
   return {
     id: row.id,
-    openid: row.openid ? row.openid.trim() : "",
     name: row.name ? row.name.trim() : "",
+    openid: row.openid ? row.openid.trim() : "",
     gender: row.gender ? row.gender.trim() : "",
     identity_no: row.identity_no ? row.identity_no.trim() : "",
     phone: row.phone ? row.phone.trim() : "",
