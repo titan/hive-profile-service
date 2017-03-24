@@ -3,7 +3,6 @@ import { server } from "./profile-server";
 import { processor } from "./profile-processor";
 import * as bunyan from "bunyan";
 
-
 const log = bunyan.createLogger({
   name: "profile-service",
   streams: [
