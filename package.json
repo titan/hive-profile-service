@@ -14,6 +14,7 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "nanomsg":"^3.3.0",
     "@types/bunyan": "0.0.34",
     "@types/msgpack-lite": "^0.1.1",
     "@types/nanomsg": "file:node_modules/@types/nanomsg",
@@ -21,11 +22,10 @@
     "@types/redis": "^0.12.33",
     "@types/uuid": "^2.0.29",
     "bunyan": "^1.8.1",
-    "hive-service": "git+http://git.fengchaohuzhu.com:10080/Titan/hive-service.git",
-    "hive-verify": "git+http://git.fengchaohuzhu.com:10080/feiluo/hive-verify.git",
+    "hive-service": "git+ssh://git@git.fengchaohuzhu.com:10022/server/hive-service.git",
+    "hive-verify": "git+ssh://git@git.fengchaohuzhu.com:10022/server/hive-verify.git",
     "msgpack-lite": "^0.1.20",
     "pg-pool": "^1.4.0",
-    "recommend-library": "git+http://git.fengchaohuzhu.com:10080/agent/recommend-library.git",
     "redis": "^2.6.2",
     "uuid": "^3.0.1"
   }

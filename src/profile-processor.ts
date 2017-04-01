@@ -65,14 +65,89 @@ processor.callAsync("refresh", async (ctx: ProcessorContext, uid?: string) => {
   }
 });
 
-processor.callAsync("setInsured", async (ctx: ProcessorContext, uid: string, insured: string) => {
-  log.info(`setInsured,uid: ${uid}, insured: ${insured}`);
+async function checkInsured(insured, user): Promise<any> {
+  log.info(`checkInsured`);
   try {
-    const db: PGClient = ctx.db;
-    const cache: RedisClient = ctx.cache;
-    await db.query("UPDATE users SET insured = $1 WHERE id = $2", [insured, uid]);
-    await sync_users(db, cache, uid);
-    return { code: 200, data: insured };
+    const old_insured = user["insured"];
+    const uid = user["id"];
+    if (old_insured !== null && old_insured !== undefined && old_insured !== "") {
+      if (old_insured !== insured) {
+        const prep = await rpcAsync("mobile", process.env["PERSON"], uid, "getPerson", old_insured);
+        if (prep["code"] === 200) {
+          if (prep["data"]["verified"] === true) {
+            return { code: 200, data: true, insured: old_insured };
+          } else {
+            return { code: 200, data: false };
+          }
+        } else {
+          return { code: 200, data: false };
+        }
+      } else {
+        return { code: 200, data: true, insured: old_insured };
+      }
+    } else {
+      return { code: 200, data: false };
+    }
+  } catch (e) {
+    log.info(e);
+    return { code: 500, msg: e.message };
+  }
+}
+
+processor.callAsync("setInsured", async (ctx: ProcessorContext, user: Object, insured: string) => {
+  log.info(`setInsured,uid: ${ctx.uid},user:${JSON.stringify(user)} `);
+  const db: PGClient = ctx.db;
+  const cache: RedisClient = ctx.cache;
+  const uid = ctx.uid;
+  try {
+    const prep = await rpcAsync(ctx.domain, process.env["PERSON"], ctx.uid, "getPerson", insured);
+    if (prep["code"] === 200) {
+      if (prep["data"]["verified"] === true) {
+        const orep = await rpcAsync(ctx.domain, process.env["ORDER"], ctx.uid, "getInsuredUid", insured);
+        if (orep["code"] === 200) {
+          const insured_uid = orep["data"];
+          if (insured_uid !== ctx.uid) {
+            return { code: 501, msg: "绑定投保人失败(pcb501)，该投保人已在其他微信号上绑定！" };
+          } else {
+            const result = await checkInsured(insured, user);
+            if (result["code"] === 200 && result["data"] === true) {
+              return { code: 200, data: result["insured"] };
+            } else if (result["code"] === 200 && result["data"] === false) {
+              await db.query("UPDATE users SET insured = $1 WHERE id = $2", [insured, uid]);
+              await sync_users(db, cache, uid);
+              return { code: 200, data: insured };
+            } else {
+              return { code: result["code"], msg: result["msg"] };
+            }
+          }
+        } else {
+          const result = await checkInsured(insured, user);
+          if (result["code"] === 200 && result["data"] === true) {
+            return { code: 200, data: result["insured"] };
+          } else if (result["code"] === 200 && result["data"] === false) {
+            await db.query("UPDATE users SET insured = $1 WHERE id = $2", [insured, uid]);
+            await sync_users(db, cache, uid);
+            return { code: 200, data: insured };
+          } else {
+            return { code: result["code"], msg: result["msg"] };
+          }
+        }
+      } else {
+        const result = await checkInsured(insured, user);
+        if (result["code"] === 200 && result["data"] === true) {
+          return { code: 200, data: result["insured"] };
+        } else if (result["code"] === 200 && result["data"] === false) {
+          await db.query("UPDATE users SET insured = $1 WHERE id = $2", [insured, uid]);
+          await sync_users(db, cache, uid);
+          return { code: 200, data: insured };
+        } else {
+          return { code: result["code"], msg: result["msg"] };
+        }
+      }
+    } else {
+      log.info("获取投保人信息失败：" + prep["msg"]);
+      return { code: prep["code"], msg: prep["msg"] };
+    }
   } catch (e) {
     log.info(e);
     return { code: 500, msg: e.message };

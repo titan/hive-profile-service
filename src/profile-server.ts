@@ -139,7 +139,7 @@ server.callAsync("getInsured", allowAll, "获取投保人信息", "获取投保�
     }
   } catch (e) {
     log.info(e);
-    return { code: 500, msg: e.message }
+    return { code: 500, msg: e.message };
   }
 });
 
@@ -155,27 +155,10 @@ server.callAsync("setInsured", allowAll, "设置投保人信息", "设置投保�
     const user = await msgpack_decode(urep);
     const uid = user["id"];
     if (uid === ctx.uid) {
-      const old_insured = user["insured"];
-      if (old_insured !== null && old_insured !== undefined && old_insured !== "") {
-        const prep = await rpcAsync("mobile", process.env["PERSON"], ctx.uid, "getPerson", old_insured);
-        if (prep["code"] === 200) {
-          if (prep["data"]["verified"] === true) {
-            return { code: 200, data: old_insured };
-          } else {
-            const args = [uid, insured];
-            const pkt: CmdPacket = { cmd: "setInsured", args: args };
-            ctx.publish(pkt);
-            return await waitingAsync(ctx);
-          }
-        } else {
-          return { code: prep["code"], msg: prep["msg"] };
-        }
-      } else {
-        const args = [uid, insured];
-        const pkt: CmdPacket = { cmd: "setInsured", args: args };
-        ctx.publish(pkt);
-        return await waitingAsync(ctx);
-      }
+      const args = [user, insured];
+      const pkt: CmdPacket = { cmd: "setInsured", args: args };
+      ctx.publish(pkt);
+      return await waitingAsync(ctx);
     } else {
       return { code: 501, msg: "暂不支持为其他用户设置投保人" };
     }

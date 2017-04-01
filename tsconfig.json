@@ -1,11 +1,7 @@
 {
   "compilerOptions": {
     "module": "commonjs",
-<<<<<<< HEAD
-    "target": "es2107",
-=======
     "target": "es2017",
->>>>>>> upstream/development
     "noImplicitAny": false,
     "sourceMap": false,
     "removeComments": true,
