@@ -170,7 +170,6 @@ processor.callAsync("setTenderOpened", async (ctx: ProcessorContext, flag: boole
   } catch (e) {
     log.error(e);
     throw { code: 500, msg: e.message };
-
   }
 });
 
@@ -189,6 +188,7 @@ function row2user(row) {
     created_at: row.created_at,
     updated_at: row.updated_at,
     tender_opened: row.tender_opened,
-    insured: row.insured
+    insured: row.insured,
+    max_orders: row.max_orders,
   };
 }
