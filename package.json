@@ -14,10 +14,10 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "nanomsg":"^3.3.0",
+    "nanomsg": "^3.3.0",
     "@types/bunyan": "0.0.34",
     "@types/msgpack-lite": "^0.1.1",
-    "@types/nanomsg": "file:node_modules/@types/nanomsg",
+    "@types/nanomsg": "^3.2.2",
     "@types/pg-pool": "0.0.2",
     "@types/redis": "^0.12.33",
     "@types/uuid": "^2.0.29",
