@@ -3,6 +3,7 @@ import { RedisClient, Multi } from "redis";
 import * as bunyan from "bunyan";
 import { verify, uuidVerifier, stringVerifier, arrayVerifier, numberVerifier, booleanVerifier } from "hive-verify";
 import * as bluebird from "bluebird";
+import { User } from "profile-library";
 
 let log = bunyan.createLogger({
   name: "profile-server",
@@ -35,7 +36,15 @@ const adminOnly: Permission[] = [["mobile", false], ["admin", true]];
 
 
 server.callAsync("getUser", allowAll, "获得用户信息", "获得当前用户信息", async (ctx: ServerContext, uid?: string) => {
-  log.info(`getUser, uid: ${uid ? uid : ctx.uid}`);
+  const userid = uid || ctx.uid;
+  log.info(`getUser, uid: ${userid}`);
+  try {
+    await verify([stringVerifier("uid", userid)]);
+  } catch (e) {
+    ctx.report(3, e);
+    log.info(e);
+    return { code: 400, msg: e.message };
+  }
   try {
     const prep = await ctx.cache.hgetAsync("profile-entities", uid ? uid : ctx.uid);
     if (prep !== null && prep !== "") {
@@ -45,8 +54,9 @@ server.callAsync("getUser", allowAll, "获得用户信息", "获得当前用户�
       return { code: 404, msg: "未找到对应用户信息" };
     }
   } catch (e) {
+    ctx.report(0, e);
     log.info(e);
-    throw { code: 500, msg: e.message };
+    return { code: 500, msg: e.message };
   }
 });
 
@@ -57,6 +67,7 @@ server.callAsync("getInviter", allowAll, "获取邀请好友信息", "发送互�
   try {
     await verify([stringVerifier("token", key)]);
   } catch (e) {
+    ctx.report(3, e);
     log.info(e);
     return { code: 400, msg: e.message };
   }
@@ -74,8 +85,9 @@ server.callAsync("getInviter", allowAll, "获取邀请好友信息", "发送互�
       return { code: 404, msg: "未找到对应用户信息" };
     }
   } catch (e) {
+    ctx.report(0, e);
     log.info(e);
-    throw { code: 500, msg: e.message };
+    return { code: 500, msg: e.message };
   }
 });
 
@@ -85,6 +97,7 @@ server.callAsync("getUsers", allowAll, "获取的用户信息", "获取一组用
   try {
     await verify([arrayVerifier("uids", uids)]);
   } catch (e) {
+    ctx.report(3, e);
     log.info(e);
     return { code: 400, msg: e.message };
   }
@@ -98,9 +111,9 @@ server.callAsync("getUsers", allowAll, "获取的用户信息", "获取一组用
         multi.hget("profile-entities", uid);
       }
       const preps = await multi.execAsync();
-      const users = [];
+      const users: User[] = [];
       for (const prep of preps.filter(x => x)) {
-        const user = await msgpack_decode(prep);
+        const user: User = (await msgpack_decode(prep)) as User;
         users.push(user);
       }
       if (users.length === 0) {
@@ -114,14 +127,15 @@ server.callAsync("getUsers", allowAll, "获取的用户信息", "获取一组用
       }
     }
   } catch (e) {
+    ctx.report(0, e);
     log.info(e);
-    throw { code: 500, msg: e.message };
+    return { code: 500, msg: e.message };
   }
 });
 
 
 server.callAsync("getInsured", allowAll, "获取投保人信息", "获取投保人信息", async (ctx: ServerContext) => {
-  log.info(`getInsured,uid:${ctx.uid}`);
+  log.info(`getInsured, uid:${ctx.uid}`);
   try {
     const urep = await ctx.cache.hgetAsync("profile-entities", ctx.uid);
     if (urep !== null && urep !== "") {
@@ -141,6 +155,7 @@ server.callAsync("getInsured", allowAll, "获取投保人信息", "获取投保�
       return { code: 404, msg: "未找到对应用户信息" };
     }
   } catch (e) {
+    ctx.report(0, e);
     log.info(e);
     return { code: 500, msg: e.message };
   }
@@ -150,24 +165,13 @@ server.callAsync("setInsured", allowAll, "设置投保人信息", "设置投保�
   try {
     await verify([uuidVerifier("insured", insured)]);
   } catch (e) {
+    ctx.report(3, e);
     log.info(e);
     return { code: 400, msg: e.message };
   }
-  const urep = await ctx.cache.hgetAsync("profile-entities", ctx.uid);
-  if (urep !== null && urep !== "") {
-    const user = await msgpack_decode(urep);
-    const uid = user["id"];
-    if (uid === ctx.uid) {
-      const args = [user, insured];
-      const pkt: CmdPacket = { cmd: "setInsured", args: args };
-      ctx.publish(pkt);
-      return await waitingAsync(ctx);
-    } else {
-      return { code: 501, msg: "暂不支持为其他用户设置互助会员" };
-    }
-  } else {
-    return { code: 404, msg: "未找到当前用户信息" };
-  }
+  const pkt: CmdPacket = { cmd: "setInsured", args: [insured]};
+  ctx.publish(pkt);
+  return await waitingAsync(ctx);
 });
 
 
@@ -177,6 +181,7 @@ server.callAsync("refresh", adminOnly, "refresh", "refresh", async (ctx: ServerC
     try {
       await verify([uuidVerifier("uid", uid)]);
     } catch (e) {
+      ctx.report(3, e);
       log.info(e);
       return { code: 400, msg: e.message };
     }
@@ -197,6 +202,7 @@ server.callAsync("setTenderOpened", allowAll, "设置开通自动投标标志", 
       try {
         await verify([uuidVerifier("uid", uid), booleanVerifier("flag", flag)]);
       } catch (e) {
+        ctx.report(3, e);
         log.info(e);
         return { code: 400, msg: e.message };
       }
@@ -211,6 +217,7 @@ server.callAsync("setTenderOpened", allowAll, "设置开通自动投标标志", 
     try {
       await verify([uuidVerifier("uid", ctx.uid), booleanVerifier("flag", flag)]);
     } catch (e) {
+      ctx.report(3, e);
       log.info(e);
       return { code: 400, msg: e.message };
     }

@@ -1,6 +1,8 @@
-import { BusinessEventContext, Processor, ProcessorContext, BusinessEventHandlerFunction, BusinessEventListener, rpcAsync, ProcessorFunction, AsyncServerFunction, CmdPacket, Permission, waiting, msgpack_decode_async as msgpack_decode, msgpack_encode_async as msgpack_encode } from "hive-service";
+import { BusinessEventContext, Processor, ProcessorContext, BusinessEventHandlerFunction, BusinessEventListener, rpcAsync, ProcessorFunction, AsyncServerFunction, CmdPacket, Permission, waiting, msgpack_decode_async, msgpack_encode_async, Result } from "hive-service";
 import { Client as PGClient, QueryResult } from "pg";
 import { RedisClient, Multi } from "redis";
+import { User } from "profile-library";
+import { Person } from "person-library";
 import * as bunyan from "bunyan";
 import * as uuid from "uuid";
 import * as bluebird from "bluebird";
@@ -36,24 +38,24 @@ async function sync_users(db: PGClient, cache: RedisClient, uid?: string): Promi
     multi.del("wxuser");
     multi.del("openid_ticket");
   }
-  const result = await db.query("SELECT id, openid, name, gender, identity_no, phone, nickname, portrait, pnrid, ticket, inviter, created_at, updated_at, tender_opened, insured, max_orders FROM users" + (uid ? " WHERE id = $1" : ""), uid ? [uid] : []);
-  const users = [];
+  const result = await db.query("SELECT id, openid, name, password, gender, identity_no, phone, nickname, portrait, pnrid, ticket, inviter, created_at, updated_at, tender_opened, insured, max_orders FROM users" + (uid ? " WHERE id = $1" : ""), uid ? [uid] : []);
+  const users: User[] = [];
   for (const row of result.rows) {
     users.push(row2user(row));
   }
   for (const user of users) {
-    multi.hset("pnrid-uid", user["pnrid"], user["id"]);
-    multi.hset("wxuser", user["id"], user["openid"]);
-    multi.hset("wxuser", user["openid"], user["id"]);
-    delete user["openid"];
-    const pkt = await msgpack_encode(user);
-    multi.hset("profile-entities", user["id"], pkt);
+    multi.hset("pnrid-uid", user.pnrid, user.id);
+    multi.hset("wxuser", user.id, user.openid);
+    multi.hset("wxuser", user.openid, user.id);
+    user.openid = "";
+    const pkt = await msgpack_encode_async(user);
+    multi.hset("profile-entities", user.id, pkt);
   }
   return multi.execAsync();
 }
 
 processor.callAsync("refresh", async (ctx: ProcessorContext, uid?: string) => {
-  log.info(`refresh${uid ? ", uid: " + uid : ""}`);
+  log.info(`refresh ${uid || ""}`);
   const db: PGClient = ctx.db;
   const cache: RedisClient = ctx.cache;
   try {
@@ -65,94 +67,36 @@ processor.callAsync("refresh", async (ctx: ProcessorContext, uid?: string) => {
   }
 });
 
-async function checkInsured(insured, user): Promise<any> {
-  log.info(`checkInsured`);
-  try {
-    const old_insured = user["insured"];
-    const uid = user["id"];
-    if (old_insured !== null && old_insured !== undefined && old_insured !== "") {
-      if (old_insured !== insured) {
-        const prep = await rpcAsync("mobile", process.env["PERSON"], uid, "getPerson", old_insured);
-        if (prep["code"] === 200) {
-          if (prep["data"]["verified"] === true) {
-            return { code: 200, data: true, insured: old_insured };
-          } else {
-            return { code: 200, data: false };
-          }
-        } else {
-          return { code: 200, data: false };
-        }
-      } else {
-        return { code: 200, data: true, insured: old_insured };
-      }
-    } else {
-      return { code: 200, data: false };
-    }
-  } catch (e) {
-    log.info(e);
-    return { code: 500, msg: e.message };
-  }
-}
-
-processor.callAsync("setInsured", async (ctx: ProcessorContext, user: Object, insured: string) => {
-  log.info(`setInsured,uid: ${ctx.uid},user:${JSON.stringify(user)} `);
+processor.callAsync("setInsured", async (ctx: ProcessorContext, insured: string) => {
+  log.info(`setInsured, uid: ${ctx.uid}, insured: ${insured} `);
   const db: PGClient = ctx.db;
   const cache: RedisClient = ctx.cache;
   const uid = ctx.uid;
-  try {
-    const prep = await rpcAsync(ctx.domain, process.env["PERSON"], ctx.uid, "getPerson", insured);
-    if (prep["code"] === 200) {
-      if (prep["data"]["verified"] === true) {
-        const orep = await rpcAsync(ctx.domain, process.env["ORDER"], ctx.uid, "getInsuredUid", insured);
-        if (orep["code"] === 200) {
-          const insured_uid = orep["data"];
-          if (insured_uid !== ctx.uid) {
-            const err = new Error(`绑定互助会员失败(pcb501)，该互助会员助已在其他微信号上绑定！`);
-            ctx.report(0, err)
-            return { code: 501, msg: "绑定互助会员失败(pcb501)，该互助会员助已在其他微信号上绑定！" };
-          } else {
-            const result = await checkInsured(insured, user);
-            if (result["code"] === 200 && result["data"] === true) {
-              return { code: 200, data: result["insured"] };
-            } else if (result["code"] === 200 && result["data"] === false) {
-              await db.query("UPDATE users SET insured = $1 WHERE id = $2", [insured, uid]);
-              await sync_users(db, cache, uid);
-              return { code: 200, data: insured };
-            } else {
-              return { code: result["code"], msg: result["msg"] };
-            }
-          }
-        } else {
-          const result = await checkInsured(insured, user);
-          if (result["code"] === 200 && result["data"] === true) {
-            return { code: 200, data: result["insured"] };
-          } else if (result["code"] === 200 && result["data"] === false) {
-            await db.query("UPDATE users SET insured = $1 WHERE id = $2", [insured, uid]);
-            await sync_users(db, cache, uid);
-            return { code: 200, data: insured };
-          } else {
-            return { code: result["code"], msg: result["msg"] };
-          }
-        }
+  const prep: Result<Person> = await rpcAsync<Person>(ctx.domain, process.env["PERSON"], ctx.uid, "getPerson", insured);
+  if (prep.code === 200) {
+    const insured_person: Person = prep.data;
+    const uresult = await db.query("SELECT id FROM users WHERE insured = $1", [insured]);
+    if (uresult.rowCount > 1) {
+      if (insured_person.verified) {
+        const err = new Error("501");
+        err.message = `绑定互助会员失败(pcb501)，该互助会员(${insured})已在其他微信号上绑定！`;
+        ctx.report(0, err);
+        return { code: 501, msg: "绑定互助会员失败(pcb501)，该互助会员助已在其他微信号上绑定！" };
       } else {
-        const result = await checkInsured(insured, user);
-        if (result["code"] === 200 && result["data"] === true) {
-          return { code: 200, data: result["insured"] };
-        } else if (result["code"] === 200 && result["data"] === false) {
-          await db.query("UPDATE users SET insured = $1 WHERE id = $2", [insured, uid]);
-          await sync_users(db, cache, uid);
-          return { code: 200, data: insured };
-        } else {
-          return { code: result["code"], msg: result["msg"] };
-        }
+        await db.query("BEGIN");
+        await db.query("UPDATE users SET insured = $1 WHERE id = $2", [insured, uid]);
+        await db.query("UPDATE users SET insured = NULL WHERE id = $1", [uresult.rows[0].id]);
+        await db.query("COMMIT");
+        await sync_users(db, cache, uid);
+        return { code: 200, data: insured };
       }
     } else {
-      log.info("获取互助会员信息失败：" + prep["msg"]);
-      return { code: prep["code"], msg: prep["msg"] };
+      await db.query("UPDATE users SET insured = $1 WHERE id = $2", [insured, uid]);
+      await sync_users(db, cache, uid);
+      return { code: 200, data: insured };
     }
-  } catch (e) {
-    log.info(e);
-    return { code: 500, msg: e.message };
+  } else {
+    return { code: 404, msg: "互助会员不存在" };
   }
 });
 
@@ -161,8 +105,8 @@ processor.callAsync("setTenderOpened", async (ctx: ProcessorContext, flag: boole
   const db: PGClient = ctx.db;
   const cache: RedisClient = ctx.cache;
   try {
-    const result = await db.query("SELECT count(1) FROM users WHERE id = $1", [uid]);
-    if (result.rows[0].count === 0) {
+    const result = await db.query("SELECT 1 FROM users WHERE id = $1", [uid]);
+    if (result.rowCount === 0) {
       return { code: 404, msg: "未找到对应用户" };
     } else {
       await db.query("UPDATE users SET tender_opened = $1 WHERE id = $2", [flag, uid]);
@@ -170,15 +114,17 @@ processor.callAsync("setTenderOpened", async (ctx: ProcessorContext, flag: boole
       return { code: 200, data: "success" };
     }
   } catch (e) {
+    ctx.report(0, e);
     log.error(e);
     throw { code: 500, msg: e.message };
   }
 });
 
-function row2user(row) {
+function row2user(row): User {
   return {
     id: row.id,
     name: row.name ? row.name.trim() : "",
+    password: row.password ? row.password.trim() : "",
     openid: row.openid ? row.openid.trim() : "",
     gender: row.gender ? row.gender.trim() : "",
     identity_no: row.identity_no ? row.identity_no.trim() : "",
