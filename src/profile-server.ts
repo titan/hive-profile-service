@@ -132,7 +132,7 @@ server.callAsync("getInsured", allowAll, "获取投保人信息", "获取投保�
           return { code: 404, msg: prep["msg"] };
         }
       } else {
-        return { code: 404, msg: "未找到对应投保人" };
+        return { code: 404, msg: "未找到对应互助会员信息" };
       }
     } else {
       return { code: 404, msg: "未找到对应用户信息" };
@@ -160,7 +160,7 @@ server.callAsync("setInsured", allowAll, "设置投保人信息", "设置投保�
       ctx.publish(pkt);
       return await waitingAsync(ctx);
     } else {
-      return { code: 501, msg: "暂不支持为其他用户设置投保人" };
+      return { code: 501, msg: "暂不支持为其他用户设置互助会员" };
     }
   } else {
     return { code: 404, msg: "未找到当前用户信息" };
