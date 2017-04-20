@@ -36,7 +36,7 @@ async function sync_users(db: PGClient, cache: RedisClient, uid?: string): Promi
     multi.del("wxuser");
     multi.del("openid_ticket");
   }
-  const result = await db.query("SELECT id, openid, name, gender, identity_no, phone, nickname, portrait, pnrid, ticket, created_at, updated_at, tender_opened, insured FROM users" + (uid ? " WHERE id = $1" : ""), uid ? [uid] : []);
+  const result = await db.query("SELECT id, openid, name, gender, identity_no, phone, nickname, portrait, pnrid, ticket, inviter, created_at, updated_at, tender_opened, insured, max_orders FROM users" + (uid ? " WHERE id = $1" : ""), uid ? [uid] : []);
   const users = [];
   for (const row of result.rows) {
     users.push(row2user(row));
@@ -107,7 +107,9 @@ processor.callAsync("setInsured", async (ctx: ProcessorContext, user: Object, in
         if (orep["code"] === 200) {
           const insured_uid = orep["data"];
           if (insured_uid !== ctx.uid) {
-            return { code: 501, msg: "绑定投保人失败(pcb501)，该投保人已在其他微信号上绑定！" };
+            const err = new Error(`绑定互助会员失败(pcb501)，该互助会员助已在其他微信号上绑定！`);
+            ctx.report(0, err)
+            return { code: 501, msg: "绑定互助会员失败(pcb501)，该互助会员助已在其他微信号上绑定！" };
           } else {
             const result = await checkInsured(insured, user);
             if (result["code"] === 200 && result["data"] === true) {
@@ -145,7 +147,7 @@ processor.callAsync("setInsured", async (ctx: ProcessorContext, user: Object, in
         }
       }
     } else {
-      log.info("获取投保人信息失败：" + prep["msg"]);
+      log.info("获取互助会员信息失败：" + prep["msg"]);
       return { code: prep["code"], msg: prep["msg"] };
     }
   } catch (e) {
@@ -185,6 +187,7 @@ function row2user(row) {
     portrait: row.portrait ? row.portrait.trim() : "",
     pnrid: row.pnrid ? row.pnrid.trim() : "",
     ticket: row.ticket ? row.ticket.trim() : "",
+    inviter: row.inviter ? row.inviter.trim() : "",
     created_at: row.created_at,
     updated_at: row.updated_at,
     tender_opened: row.tender_opened,
