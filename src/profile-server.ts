@@ -2,6 +2,7 @@ import { Server, ServerContext, rpcAsync, AsyncServerFunction, CmdPacket, Permis
 import { RedisClient, Multi } from "redis";
 import * as bunyan from "bunyan";
 import { verify, uuidVerifier, stringVerifier, arrayVerifier, numberVerifier, booleanVerifier } from "hive-verify";
+import * as bluebird from "bluebird";
 
 let log = bunyan.createLogger({
   name: "profile-server",
@@ -79,8 +80,8 @@ server.callAsync("getInviter", allowAll, "获取邀请好友信息", "发送互�
 });
 
 
-server.callAsync("getUserByUserIds", allowAll, "获取的用户信息", "获取一组用户信息", async (ctx: ServerContext, uids) => {
-  log.info(`getUserByUserIds, uids: ${uids}`);
+server.callAsync("getUsers", allowAll, "获取的用户信息", "获取一组用户信息", async (ctx: ServerContext, uids: string[]) => {
+  log.info(`getUsers, uids: ${JSON.stringify(uids)}`);
   try {
     await verify([arrayVerifier("uids", uids)]);
   } catch (e) {
@@ -92,19 +93,21 @@ server.callAsync("getUserByUserIds", allowAll, "获取的用户信息", "获取�
     if (len === 0) {
       return { code: 404, msg: "请选择需要查看的用户信息" };
     } else {
-      const users = [];
+      const multi = bluebird.promisifyAll(ctx.cache.multi()) as Multi;
       for (const uid of uids) {
-        const prep = await ctx.cache.hgetAsync("profile-entities", uid);
-        if (prep !== null && prep !== "") {
-          const user = await msgpack_decode(prep);
-          users.push(user);
-        }
+        multi.hget("profile-entities", uid);
+      }
+      const preps = await multi.execAsync();
+      const users = [];
+      for (const prep of preps.filter(x => x)) {
+        const user = await msgpack_decode(prep);
+        users.push(user);
       }
       if (users.length === 0) {
         return { code: 404, msg: "未找到对应用户信息" };
       } else {
         const result = {};
-        for (let user of users) {
+        for (const user of users) {
           result[user.id] = user;
         }
         return { code: 200, data: result };
