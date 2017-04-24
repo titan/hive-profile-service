@@ -228,3 +228,30 @@ server.callAsync("setTenderOpened", allowAll, "设置开通自动投标标志", 
   }
 });
 
+server.callAsync("getRecommend", allowAll, "获取新用户的推荐人", "获取新用户的推荐人（老用户）", async (ctx: ServerContext, uid?: string) => {
+  log.info(`getRecommend, uid: ${ctx.domain === "mobile" ? ctx.uid : uid}`);
+  const args = [];
+  if (ctx.domain === "admin") {
+    try {
+      await verify([uuidVerifier("uid", uid)]);
+    } catch (e) {
+      ctx.report(3, e);
+      log.error(e);
+      return { code: 400, msg: e.message };
+    }
+    args.push(uid);
+  } else {
+    try {
+      await verify([uuidVerifier("uid", ctx.uid)]);
+    } catch (e) {
+      ctx.report(3, e);
+      log.error(e);
+      return { code: 400, msg: e.message };
+    }
+    args.push(ctx.uid);
+  }
+  const pkt: CmdPacket = { cmd: "getRecommend", args: args };
+  ctx.publish(pkt);
+  return await waitingAsync(ctx);
+});
+

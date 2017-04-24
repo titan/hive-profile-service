@@ -77,17 +77,21 @@ processor.callAsync("setInsured", async (ctx: ProcessorContext, insured: string)
     const insured_person: Person = prep.data;
     const uresult = await db.query("SELECT id FROM users WHERE insured = $1", [insured]);
     if (uresult.rowCount > 1) {
-      if (insured_person.verified) {
-        const err = new Error("501");
-        err.message = `绑定互助会员失败(pcb501)，该互助会员(${insured})已在其他微信号上绑定！`;
-        ctx.report(0, err);
-        return { code: 501, msg: "绑定互助会员失败(pcb501)，该互助会员助已在其他微信号上绑定！" };
+      if (uid !== uresult.rows[0].id) {
+        if (insured_person.verified) {
+          const err = new Error("501");
+          err.message = `绑定互助会员失败(pcb501)，该互助会员(${insured})已在其他微信号上绑定！`;
+          ctx.report(0, err);
+          return { code: 501, msg: "绑定互助会员失败(pcb501)，该互助会员助已在其他微信号上绑定！" };
+        } else {
+          await db.query("BEGIN");
+          await db.query("UPDATE users SET insured = $1 WHERE id = $2", [insured, uid]);
+          await db.query("UPDATE users SET insured = NULL WHERE id = $1", [uresult.rows[0].id]);
+          await db.query("COMMIT");
+          await sync_users(db, cache, uid);
+          return { code: 200, data: insured };
+        }
       } else {
-        await db.query("BEGIN");
-        await db.query("UPDATE users SET insured = $1 WHERE id = $2", [insured, uid]);
-        await db.query("UPDATE users SET insured = NULL WHERE id = $1", [uresult.rows[0].id]);
-        await db.query("COMMIT");
-        await sync_users(db, cache, uid);
         return { code: 200, data: insured };
       }
     } else {
@@ -117,6 +121,21 @@ processor.callAsync("setTenderOpened", async (ctx: ProcessorContext, flag: boole
     ctx.report(0, e);
     log.error(e);
     throw { code: 500, msg: e.message };
+  }
+});
+
+processor.callAsync("getRecommend", async (ctx: ProcessorContext, uid: string) => {
+  log.info(`getRecommend, uid: ${uid}`);
+  const db: PGClient = ctx.db;
+  const cache: RedisClient = ctx.cache;
+  const result = await db.query("SELECT DISTINCT ut.uid FROM user_tickets AS ut INNER JOIN users AS u on u.ticket = ut.ticket WHERE u.id = $1", [uid]);
+  if (result.rowCount === 0) {
+    return { code: 404, msg: "未找到用户的推荐人" };
+  } else {
+    const recommend = result.rows[0].uid;
+    const pkt = await cache.hgetAsync("profile-entities", recommend);
+    const profile = await msgpack_decode_async(pkt);
+    return { code: 200, data: profile };
   }
 });
 
