@@ -1,9 +1,10 @@
-import { Server, ServerContext, rpcAsync, AsyncServerFunction, CmdPacket, Permission, waitingAsync, msgpack_decode_async as msgpack_decode, msgpack_encode_async as msgpack_encode } from "hive-service";
+import { Server, ServerContext, rpcAsync, AsyncServerFunction, CmdPacket, Permission, waitingAsync, msgpack_decode_async, msgpack_encode_async, Result } from "hive-service";
 import { RedisClient, Multi } from "redis";
 import * as bunyan from "bunyan";
 import { verify, uuidVerifier, stringVerifier, arrayVerifier, numberVerifier, booleanVerifier } from "hive-verify";
 import * as bluebird from "bluebird";
 import { User } from "profile-library";
+import { Person } from "person-library";
 
 let log = bunyan.createLogger({
   name: "profile-server",
@@ -48,7 +49,7 @@ server.callAsync("getUser", allowAll, "获得用户信息", "获得当前用户�
   try {
     const prep = await ctx.cache.hgetAsync("profile-entities", uid ? uid : ctx.uid);
     if (prep !== null && prep !== "") {
-      const profile_entities = await msgpack_decode(prep);
+      const profile_entities = await msgpack_decode_async(prep);
       return { code: 200, data: profile_entities };
     } else {
       return { code: 404, msg: "未找到对应用户信息" };
@@ -76,7 +77,7 @@ server.callAsync("getInviter", allowAll, "获取邀请好友信息", "发送互�
     if (uid !== null && uid !== "") {
       const prep = await ctx.cache.hgetAsync("profile-entities", String(uid));
       if (prep !== null && prep !== "") {
-        const profile_entities = await msgpack_decode(prep);
+        const profile_entities = await msgpack_decode_async(prep);
         return { code: 200, data: profile_entities };
       } else {
         return { code: 404, msg: "未找到对应用户信息" };
@@ -113,7 +114,7 @@ server.callAsync("getUsers", allowAll, "获取的用户信息", "获取一组用
       const preps = await multi.execAsync();
       const users: User[] = [];
       for (const prep of preps.filter(x => x)) {
-        const user: User = (await msgpack_decode(prep)) as User;
+        const user: User = (await msgpack_decode_async(prep)) as User;
         users.push(user);
       }
       if (users.length === 0) {
@@ -139,10 +140,10 @@ server.callAsync("getInsured", allowAll, "获取投保人信息", "获取投保�
   try {
     const urep = await ctx.cache.hgetAsync("profile-entities", ctx.uid);
     if (urep !== null && urep !== "") {
-      const user = await msgpack_decode(urep);
+      const user: User = await msgpack_decode_async(urep) as User;
       const insured = user["insured"];
       if (insured) {
-        const prep = await rpcAsync("mobile", process.env["PERSON"], ctx.uid, "getPerson", insured);
+        const prep: Result<Person> = await rpcAsync<Person>("mobile", process.env["PERSON"], ctx.uid, "getPerson", insured);
         if (prep["code"] === 200) {
           return { code: 200, data: prep["data"] };
         } else {

@@ -38,7 +38,7 @@ async function sync_users(db: PGClient, cache: RedisClient, uid?: string): Promi
     multi.del("wxuser");
     multi.del("openid_ticket");
   }
-  const result = await db.query("SELECT id, openid, name, password, gender, identity_no, phone, nickname, portrait, pnrid, ticket, inviter, created_at, updated_at, tender_opened, insured, max_orders FROM users" + (uid ? " WHERE id = $1" : ""), uid ? [uid] : []);
+  const result = await db.query("SELECT id, openid, name, password, gender, identity_no, phone, nickname, portrait, pnrid, ticket, inviter, created_at, updated_at, tender_opened, insured, max_orders, disabled FROM users" + (uid ? " WHERE id = $1" : ""), uid ? [uid] : []);
   const users: User[] = [];
   for (const row of result.rows) {
     users.push(row2user(row));
@@ -158,5 +158,6 @@ function row2user(row): User {
     tender_opened: row.tender_opened,
     insured: row.insured,
     max_orders: row.max_orders,
+    disabled: row.disabled,
   };
 }
